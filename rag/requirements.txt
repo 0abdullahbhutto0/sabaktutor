@@ -1,0 +1,10 @@
+# Core dependencies
+sentence-transformers>=2.2.0
+torch>=1.9.0
+numpy>=1.21.0
+
+google-genai
+
+
+# Utilities
+tqdm>=4.65.0
