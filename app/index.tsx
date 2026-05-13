@@ -14,9 +14,14 @@ export default function Splash() {
           Powered by Agentic AI—No Videos, Just Logic.
         </Text>
       </View>
-      <Pressable style={styles.button} onPress={() => router.push('/signup')}>
-        <Text style={styles.buttonText}>Get Started</Text>
-      </Pressable>
+      <View style={styles.buttonContainer}>
+        <Pressable style={styles.button} onPress={() => router.push('/signup')}>
+          <Text style={styles.buttonText}>Get Started</Text>
+        </Pressable>
+        <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => router.push('/login')}>
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>Login</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -62,5 +67,16 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  buttonContainer: {
+    gap: 12,
+    marginBottom: 32,
+  },
+  secondaryButton: {
+    backgroundColor: '#e3efff',
+    borderBottomColor: '#bbcbbb',
+  },
+  secondaryButtonText: {
+    color: '#006d37',
   },
 });
