@@ -3,6 +3,7 @@
 # dependencies
 node_modules/
 rag/venv
+rag/.env
 rag/hybrid_tree_search/__pycache__
 # Expo
 .expo/

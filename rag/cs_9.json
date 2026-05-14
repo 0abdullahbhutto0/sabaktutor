@@ -24,7 +24,7 @@
         "text": "## CONTENTS\n\n|  Unit No. | Description | Page No.  |\n| --- | --- | --- |\n|  1. | Fundamentals of Computer | 1  |\n|  2. | Fundamentals of Operating System | 30  |\n|  3. | Office Automation | 46  |\n|  4. | Data Communication and Computer Networks | 65  |\n|  5. | Computer Security and Ethics | 95  |\n|  6. | Web Development | 117  |\n|  7. | Introduction to Database System | 142  |\n"
       },
       {
-        "title": "FUNDAMENTALS OF COMPUTER",
+        "title": "1.0 FUNDAMENTALS OF COMPUTER",
         "node_id": "0003",
         "summary": "## FUNDAMENTALS OF COMPUTER\n\n![img-7.jpeg](img-7.jpeg)\n\nFirst Generation\n\nSecond Generation\n\n![img-8.jpeg](img-8.jpeg)\n\nThird Generation\n\nFourth Generation\n\n2\n![img-9.jpeg](img-9.jpeg)\n\n- Demonstrate the understanding about the history of computers\n- Outline the various generations of computers\n- Classify the computers as per their size and technology used to date\n",
         "start_index": 7,
@@ -116,7 +116,7 @@
         ]
       },
       {
-        "title": "FUNDAMENTALS OF OPERATING SYSTEM",
+        "title": "2.0 FUNDAMENTALS OF OPERATING SYSTEM",
         "node_id": "0014",
         "summary": "# FUNDAMENTALS OF OPERATING SYSTEM\n\n![img-39.jpeg](img-39.jpeg)\n",
         "start_index": 36,
@@ -158,7 +158,7 @@
         ]
       },
       {
-        "title": "OFFICE AUTOMATION",
+        "title": "3.0 OFFICE AUTOMATION",
         "node_id": "0019",
         "summary": "## OFFICE AUTOMATION\n\n![img-53.jpeg](img-53.jpeg)\n\n47\nSLOs\nDemonstrate Page Layout Tab of MS Word\nIdentify the different groups of Page Layout Tab\nApply different features available in groups of Page Layout Tab\n",
         "start_index": 52,
@@ -200,7 +200,7 @@
         ]
       },
       {
-        "title": "DATA COMMUNICATION AND COMPUTER NETWORK",
+        "title": "4.0 DATA COMMUNICATION AND COMPUTER NETWORK",
         "node_id": "0024",
         "summary": "## DATA COMMUNICATION AND COMPUTER NETWORK\n\n![img-83.jpeg](img-83.jpeg)\n\n66\nSLOs\n\n- Define the basic terminology of data communication\n- Elaborate the terms data rate and baud rate with corresponding formulas and standard units\n- Differentiate between analog and digital signals\n- Distinguish between data rate and baud rate\n",
         "start_index": 71,
@@ -290,7 +290,7 @@
         ]
       },
       {
-        "title": "COMPUTER SECURITY AND ETHICS",
+        "title": "5.0 COMPUTER SECURITY AND ETHICS",
         "node_id": "0035",
         "summary": "## COMPUTER SECURITY AND ETHICS\n\n![img-119.jpeg](img-119.jpeg)\n\nSLAW COMPLETE\n\nPASSWORD PROTEC\n\n![img-120.jpeg](img-120.jpeg)\n\n![img-121.jpeg](img-121.jpeg)\n\n![img-122.jpeg](img-122.jpeg)\n\n![img-123.jpeg](img-123.jpeg)\n\n![img-124.jpeg](img-124.jpeg)\n\n96\n\nSLOs\n\n![img-125.jpeg](img-125.jpeg)\n\n- Explain the importance of computer security in daily life\n- Define various terms related to computer security\n- Explain computer crimes by giving real-life examples\n- Describe Cyber-Attacks and how to prevent them\n- Discuss Cyber- Harassment and what to do in case of becoming a victim\n- Explain how to seek help against Cyber-Crime\n",
         "start_index": 101,
@@ -348,7 +348,7 @@
         ]
       },
       {
-        "title": "WEB DEVELOPMENT",
+        "title": "6.0 WEB DEVELOPMENT",
         "node_id": "0042",
         "summary": "## WEB DEVELOPMENT\n\n![img-144.jpeg](img-144.jpeg)\n\n![img-145.jpeg](img-145.jpeg)\n\n118\n\n![img-146.jpeg](img-146.jpeg)\n\n- Recall the understanding of basic terms related to web development\n- Define different terms\n- Identify and compare different types of websites\n- Compare various types of websites\n",
         "start_index": 123,
@@ -470,7 +470,7 @@
         ]
       },
       {
-        "title": "INTRODUCTION TO DATABASE SYSTEM",
+        "title": "7.0 INTRODUCTION TO DATABASE SYSTEM",
         "node_id": "0057",
         "summary": "## INTRODUCTION TO DATABASE SYSTEM\n\n![img-162.jpeg](img-162.jpeg)\n\n![img-163.jpeg](img-163.jpeg)\n\n![img-164.jpeg](img-164.jpeg)\n\n![img-165.jpeg](img-165.jpeg)\n\n143\n\n![img-166.jpeg](img-166.jpeg)\n\n- Define terms flat file system and database system\n- Differentiate between flat file system and database system\n- Discuss the advantages of database system over flat file system\n- Differentiate between database and database management system (DBMS)\n",
         "start_index": 148,
