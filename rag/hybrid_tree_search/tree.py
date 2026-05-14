@@ -33,6 +33,7 @@ class Chunk:
         if not self.id:
             self.id = str(uuid.uuid4())
 
+  
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -163,12 +164,137 @@ class DocumentTree:
     def get_node(self, node_id: str) -> Optional[TreeNode]:
         """Get a node by ID."""
         return self.nodes.get(node_id)
+    
+    def print_tree(self, max_content_length: int = 80) -> str:
+        """
+        Print the tree structure as a formatted string.
+        Shows hierarchy, node IDs, titles, and content previews.
+
+        Args:
+            max_content_length: Truncate content previews to this length
+
+        Returns:
+            Formatted string representation of the tree
+        """
+        lines = []
+        lines.append("=" * 60)
+        lines.append("DOCUMENT TREE STRUCTURE")
+        lines.append("=" * 60)
+
+        root = self.nodes.get(self.root_id)
+        if not root:
+            return "Empty tree"
+
+        def format_node(node: TreeNode, depth: int, prefix: str = ""):
+            indent = "  " * depth
+            node_id = node.metadata.get("node_id", node.id)
+
+            # Build info line
+            title = node.title or "Untitled"
+            chunk_count = len(node.chunks)
+            content_preview = ""
+            if node.content:
+                preview = node.content[:max_content_length].replace("\n", " ")
+                if len(node.content) > max_content_length:
+                    preview += "..."
+                content_preview = f" | {preview}"
+
+            lines.append(f"{indent}{prefix}[{node_id}] {title} ({chunk_count} chunks){content_preview}")
+
+            # Recurse to children
+            for i, child_id in enumerate(node.children_ids):
+                child = self.nodes.get(child_id)
+                if child:
+                    is_last = (i == len(node.children_ids) - 1)
+                    child_prefix = "└── " if is_last else "├── "
+                    format_node(child, depth + 1, child_prefix)
+
+        # Start from root's children (chapters)
+        for i, child_id in enumerate(root.children_ids):
+            child = self.nodes.get(child_id)
+            if child:
+                is_last = (i == len(root.children_ids) - 1)
+                prefix = "└── " if is_last else "├── "
+                format_node(child, 0, prefix)
+
+        lines.append("=" * 60)
+        lines.append(f"Total nodes: {self.get_node_count()}")
+        lines.append(f"Root ID: {self.root_id}")
+        lines.append("=" * 60)
+
+        return "\n".join(lines)
+
+    def get_node_path(self, node_id: str) -> List[str]:
+        """
+        Get the path from root to a specific node.
+
+        Args:
+            node_id: Target node ID
+
+        Returns:
+            List of node titles from root to target
+        """
+        path = []
+        current = self.nodes.get(node_id)
+        while current:
+            path.append(current.title or current.id)
+            current = self.nodes.get(current.parent_id) if current.parent_id else None
+        return list(reversed(path))
+
 
     def get_all_nodes(self, node_type: Optional[NodeType] = None) -> List[TreeNode]:
         """Get all nodes, optionally filtered by type."""
         if node_type is None:
             return list(self.nodes.values())
         return [n for n in self.nodes.values() if n.node_type == node_type]
+
+    def get_chapter_nodes(self, chapter_node_id: str) -> List["TreeNode"]:
+        """
+        Get all nodes belonging to a specific chapter.
+        Includes the chapter node itself + all descendants.
+
+        Args:
+            chapter_node_id: ID of the chapter node (top-level node under root)
+
+        Returns:
+            List of TreeNode objects in this chapter
+        """
+        chapter_nodes = []
+
+        # Verify the node exists and is a direct child of root (i.e., a chapter)
+        chapter_node = self.nodes.get(chapter_node_id)
+        if not chapter_node:
+            return []
+
+        # Collect chapter + all descendants recursively
+        def collect_descendants(node_id: str):
+            node = self.nodes.get(node_id)
+            if not node:
+                return
+            chapter_nodes.append(node)
+            for child_id in node.children_ids:
+                collect_descendants(child_id)
+
+        collect_descendants(chapter_node_id)
+        return chapter_nodes
+
+    def get_chapters(self) -> List["TreeNode"]:
+        """
+        Get all top-level chapters (direct children of root).
+
+        Returns:
+            List of chapter TreeNode objects
+        """
+        root = self.nodes.get(self.root_id)
+        if not root:
+            return []
+
+        chapters = []
+        for child_id in root.children_ids:
+            node = self.nodes.get(child_id)
+            if node:
+                chapters.append(node)
+        return chapters
 
     def get_node_count(self) -> int:
         """Get total number of nodes."""
