@@ -1,6 +1,6 @@
 # Hybrid Tree Search System
 
-A production-ready hybrid retrieval system combining LLM-based tree search with value-based prediction using Monte Carlo Tree Search (MCTS) for optimal document retrieval.
+A hybrid retrieval system combining LLM-based tree search with value-based prediction using Monte Carlo Tree Search (MCTS) for optimal document retrieval.
 
 ## Features
 
@@ -22,42 +22,12 @@ pip install -r requirements.txt
 sentence-transformers>=2.2.0
 torch>=1.9.0
 numpy>=1.21.0
+tqdm>=4.65.0
+google-genai
 ```
 
 Optional:
-- `openai` for OpenAI API integration
-- `anthropic` for Anthropic Claude integration
-
-## Quick Start
-
-```python
-from hybrid_tree_search import HybridSearchEngine, SearchOptions, SearchMode
-from hybrid_tree_search.tree import DocumentTree
-
-# Create engine
-engine = HybridSearchEngine()
-
-# Index documents
-documents = [
-    {"id": "d1", "title": "Python Tutorial", "content": "Python is a programming language..."},
-    {"id": "d2", "title": "JavaScript Guide", "content": "JavaScript is a web language..."},
-]
-engine.index_documents(documents)
-
-# Search
-response = engine.search(
-    "Python programming",
-    options=SearchOptions(
-        mode=SearchMode.HYBRID,
-        max_results=10,
-        return_synthesis=True
-    )
-)
-
-print(f"Found {len(response.results)} results")
-for result in response.results:
-    print(f"  Score: {result['score']:.3f} - {result.get('title', 'Untitled')}")
-```
+- `google-genai` for Gemini API integration
 
 ## Architecture
 
@@ -67,8 +37,7 @@ for result in response.results:
 2. **EmbeddingManager**: Handles embedding generation using sentence transformers
 3. **ValueFunction**: Predicts node relevance using embedding similarity
 4. **MonteCarloTreeSearch**: MCTS implementation for optimal search
-5. **LLMEvaluator**: LLM-based evaluation and synthesis
-6. **HybridSearchEngine**: Orchestrates all components for hybrid search
+5. **HybridSearchEngine**: Orchestrates all components for hybrid search
 
 ### Node Scoring Formula
 
@@ -99,15 +68,6 @@ config = SearchConfig()
 from hybrid_tree_search.hybrid_search import SearchMode
 
 options = SearchOptions(mode=SearchMode.HYBRID)
-
-
-```
-
-## Running Tests
-
-```bash
-cd /workspace/hybrid_tree_search
-python -m pytest tests/test_hybrid_tree_search.py -v
 ```
 
 ## API Reference
@@ -119,7 +79,6 @@ Main entry point for search operations.
 ```python
 engine = HybridSearchEngine(config=config)
 engine.index_tree(tree)           # Index from DocumentTree
-engine.index_documents(docs)      # Index from document dicts
 response = engine.search(query, options)
 stats = engine.get_statistics()
 ```

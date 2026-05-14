@@ -1,30 +1,22 @@
 """
 Configuration Module for Hybrid Tree Search System
 ===================================================
-Handles all configuration parameters for embedding, and MCTS components.
+Handles all configuration parameters for embedding and MCTS components.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
-from enum import Enum
-import os
-
-
-class EmbeddingModel(str, Enum):
-    """Supported embedding models."""
-    SENTENCE_TRANSFORMER = "BAAI/bge-small-en-v1.5"
-
+from typing import Optional, Dict, Any
 
 
 @dataclass
 class EmbeddingConfig:
     """Configuration for embedding models."""
 
-    model_name: str = EmbeddingModel.SENTENCE_TRANSFORMER.value
+    model_name: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384
     batch_size: int = 32
     max_seq_length: int = 512
-    device: str = "cpu"  
+    device: str = "cpu"
     normalize_embeddings: bool = True
     cache_folder: Optional[str] = None
 
@@ -47,32 +39,24 @@ class EmbeddingConfig:
 class MCTSConfig:
     """Configuration for Monte Carlo Tree Search."""
 
-    # Search parameters
-    max_iterations: int = 1000
+    max_iterations: int = 75
     max_depth: int = 50
-    exploration_constant: float = 1.414  
-    min_visits: int = 5  
+    exploration_constant: float = 1.414
+    min_visits: int = 5
 
-    # Value function weights
     value_weight: float = 0.7
     diversity_weight: float = 0.3
 
-    # Termination criteria
-    early_stop_threshold: float = 0.95
+    early_stop_threshold: float = 0.8
     min_results: int = 3
     max_results: int = 20
 
-    # Parallel search
     parallel_value_searches: int = 4
-    parallel_llm_searches: int = 2
-
-    # Rollout parameters
     rollout_depth: int = 5
-    rollout_sampling: str = "best"  # "best", "random", "ucb"
+    rollout_sampling: str = "best"
 
-    # Caching
     cache_evaluations: bool = True
-    cache_ttl: int = 3600  # Cache TTL in seconds
+    cache_ttl: int = 3600
 
     def __post_init__(self):
         """Validate configuration."""
@@ -83,10 +67,8 @@ class MCTSConfig:
         if not 0 <= self.diversity_weight <= 1:
             raise ValueError("diversity_weight must be between 0 and 1")
 
-        # Ensure weights sum to 1
-        total = self.value_weight  + self.diversity_weight
+        total = self.value_weight + self.diversity_weight
         if abs(total - 1.0) > 0.01:
-            # Normalize weights
             self.value_weight /= total
             self.diversity_weight /= total
 
@@ -98,32 +80,23 @@ class SearchConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     mcts: MCTSConfig = field(default_factory=MCTSConfig)
 
-    # Node scoring
     top_k_chunks: int = 10
-    score_aggregation: str = "mean"  # "mean", "max", "sum"
+    score_aggregation: str = "mean"
     use_square_root_normalization: bool = True
 
-    # System settings
     log_level: str = "INFO"
     enable_progress_bar: bool = True
     max_workers: int = 4
-
-    # Performance tuning
-    use_fp16: bool = False
-    precompute_embeddings: bool = True
-    lazy_chunking: bool = False
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "SearchConfig":
         """Create config from dictionary."""
         embedding_config = EmbeddingConfig(**config_dict.get("embedding", {}))
         mcts_config = MCTSConfig(**config_dict.get("mcts", {}))
-
         return cls(
             embedding=embedding_config,
             mcts=mcts_config,
-            **{k: v for k, v in config_dict.items()
-               if k not in ["embedding", "llm", "mcts"]}
+            **{k: v for k, v in config_dict.items() if k not in ["embedding", "mcts"]}
         )
 
     def to_dict(self) -> Dict[str, Any]:
