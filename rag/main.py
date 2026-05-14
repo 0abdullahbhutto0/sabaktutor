@@ -1,23 +1,20 @@
-#!/usr/bin/env python3
 """
 Hybrid Tree Search - Main Entry Point
 ======================================
 Search your document tree with MCTS + LLM hybrid approach.
 
 Usage:
-    python main.py tree.json "your query"
+    python -m main 
 """
 
 import json
-import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from google import genai
+# from google import genai
 
 from hybrid_tree_search import (
     HybridSearchEngine,
     SearchOptions,
-    SearchMode,
     DocumentTree,
     TreeNode,
     Chunk,
@@ -28,11 +25,7 @@ def load_tree_from_json(filepath: str) -> DocumentTree:
     """
     Load document tree from JSON file.
 
-    Supports formats:
-    1. Simple document list:
-       [{"id": "d1", "title": "...", "content": "..."}]
-
-    2. Hierarchical tree (like your format):
+    1. Hierarchical tree (like your format):
        [{"node_id": "0001", "title": "...", "text": "...", "summary": "...", "nodes": [...]}]
     """
     with open(filepath, 'r',encoding='utf-8') as f:
@@ -42,18 +35,10 @@ def load_tree_from_json(filepath: str) -> DocumentTree:
 
     def process_nodes(node_data_list: List[Dict], parent_node_id: Optional[str] = None):
         for node_data in node_data_list:
-            # Get node ID - use node_id or generate one
             node_id = node_data.get("node_id") or node_data.get("id") or f"node_{len(tree.nodes)}"
-
-           
             content = node_data.get("text") or node_data.get("content", "")
-
-           
             title = node_data.get("title", "")
-
             summary = node_data.get("summary", "")
-
-            
             node = TreeNode(
                 node_type="document",
                 content=content,
@@ -66,17 +51,11 @@ def load_tree_from_json(filepath: str) -> DocumentTree:
                     "end_index": node_data.get("end_index"),
                 },
             )
-
-            # Add chunks from text
             if content:
                 chunk = Chunk(
                     content=content,
-                    start_char=0,
-                    end_char=len(content),
                 )
                 node.add_chunk(chunk)
-
-            # Add to tree
             if parent_node_id:
                 tree.add_node(node, parent_id=parent_node_id)
             else:
@@ -87,7 +66,6 @@ def load_tree_from_json(filepath: str) -> DocumentTree:
             if child_nodes:
                 process_nodes(child_nodes, parent_node_id=node.id)
 
-    # Handle both list and dict formats
     if isinstance(data, list):
         process_nodes(data)
     elif isinstance(data, dict) and "nodes" in data:
@@ -98,14 +76,13 @@ def load_tree_from_json(filepath: str) -> DocumentTree:
     return tree
 
 
-def search(tree: DocumentTree, query: str, mode: str , max_results: int ) -> Dict[str, Any]:
+def search(tree: DocumentTree, query: str , max_results: int ) -> Dict[str, Any]:
     """
     Search the document tree.
 
     Args:
         tree: DocumentTree to search
         query: Search query
-        mode: "hybrid", "value_only", "mcts_only", "llm_only"
         max_results: Maximum results
 
     Returns:
@@ -114,17 +91,8 @@ def search(tree: DocumentTree, query: str, mode: str , max_results: int ) -> Dic
     engine = HybridSearchEngine()
     engine.index_tree(tree)
 
-    mode_map = {
-        "hybrid": SearchMode.HYBRID,
-        "value_only": SearchMode.VALUE_ONLY,
-        "mcts_only": SearchMode.MCTS_ONLY,
-        "llm_only": SearchMode.LLM_ONLY,
-    }
-
     options = SearchOptions(
-        mode=mode_map.get(mode, SearchMode.HYBRID),
         max_results=max_results,
-        
     )
 
     response = engine.search(query, options)
@@ -150,25 +118,21 @@ def main():
         print("Error: No query provided")
         return
 
-    # Get mode
-    mode = "hybrid"
-   
-
-    # Load tree
     print(f"\nLoading tree from: {filepath}")
     tree = load_tree_from_json(filepath)
     print(f"Tree loaded: {tree.get_node_count()} nodes")
 
-    # Perform search
     print(f"\nSearching for: '{query}'")
-    print(f"Mode: {mode}")
     print("-" * 70)
 
-    results = search(tree, query, mode=mode, max_results=5)
+    results = search(tree, query, max_results=3)
 
-    # Print results
-    print(f"\nFound {len(results['results'])} results in {results['search_time']:.3f}s\n")
-
+    # print(f"\nFound {len(results['results'])} results in {results['search_time']:.3f}s\n")
+    # for i, result in enumerate(results["results"]):
+    #     print(f"result# {i+1}: score {result['score']}")
+    #     print(f"title: {result['title']}")
+    #     print(f"content: {result['content'][:300]}")
+    #     print()
   
     gemini_key = ''
 
