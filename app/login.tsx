@@ -1,4 +1,4 @@
-import { View, Text, TextInput, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import { useState } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -25,6 +25,7 @@ export default function Login() {
 
   return (
     <View style={styles.container}>
+      <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.header}>SabakTutor</Text>
       <Text style={styles.title}>Welcome Back</Text>
       <Text style={styles.subtitle}>Continue your logic-first learning</Text>
@@ -47,13 +48,13 @@ export default function Login() {
         onChangeText={setPassword}
       />
 
-      <Pressable style={styles.button} onPress={handleLogin}>
+      <TouchableOpacity activeOpacity={0.7} style={styles.button} onPress={handleLogin}>
         <Text style={styles.buttonText}>Login</Text>
-      </Pressable>
+      </TouchableOpacity>
 
-      <Pressable onPress={() => router.replace('/signup')} style={styles.linkContainer}>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => router.replace('/signup')} style={styles.linkContainer}>
         <Text style={styles.linkText}>Don't have an account? Sign up</Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -64,6 +65,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f9ff',
     padding: 24,
     justifyContent: 'center',
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    marginBottom: 16,
   },
   header: {
     fontSize: 22,

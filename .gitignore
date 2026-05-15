@@ -3,7 +3,6 @@
 # dependencies
 node_modules/
 rag/venv
-rag/.env
 rag/hybrid_tree_search/__pycache__
 # Expo
 .expo/
@@ -39,7 +38,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
-
+firestore_schema_plan.md
 # generated native folders
 /ios
 /android

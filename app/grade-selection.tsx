@@ -31,7 +31,7 @@ export default function GradeSelection() {
           <Text style={styles.cardIcon}>📘</Text>
           <Text style={styles.cardTitle}>Class 9</Text>
         </Pressable>
-        <Pressable style={styles.card} onPress={() => selectGrade(10)}>
+        <Pressable style={[styles.card, { opacity: 0.5 }]} disabled={true}>
           <Text style={styles.cardIcon}>📗</Text>
           <Text style={styles.cardTitle}>Class 10</Text>
         </Pressable>

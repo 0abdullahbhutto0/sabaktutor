@@ -1,4 +1,4 @@
-import { View, Text, TextInput, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import { useState } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -37,6 +37,7 @@ export default function Signup() {
 
   return (
     <View style={styles.container}>
+      <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.header}>SabakTutor</Text>
       <Text style={styles.title}>Create your Profile</Text>
       <Text style={styles.subtitle}>Setup your logic-first identity</Text>
@@ -80,16 +81,16 @@ export default function Signup() {
         onChangeText={setPassword}
       />
 
-      <Pressable style={styles.button} onPress={handleSignup}>
+      <TouchableOpacity activeOpacity={0.7} style={styles.button} onPress={handleSignup}>
         <Text style={styles.buttonText}>Continue</Text>
-      </Pressable>
+      </TouchableOpacity>
 
       <Text style={styles.footer}>
         By continuing, you agree to our privacy guidelines. SabakTutor keeps your learning journey anonymous and safe.
       </Text>
-      <Pressable onPress={() => router.replace('/login')} style={styles.linkContainer}>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => router.replace('/login')} style={styles.linkContainer}>
         <Text style={styles.linkText}>Already have an account? Login</Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -100,6 +101,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f9ff',
     padding: 24,
     justifyContent: 'center',
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    marginBottom: 16,
   },
   header: {
     fontSize: 22,
