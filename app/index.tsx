@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import ChunkyButton from './components/ChunkyButton';
 
 export default function Splash() {
   const router = useRouter();
@@ -19,9 +20,11 @@ export default function Splash() {
         </Text>
       </View>
       <View style={styles.buttonContainer}>
-        <TouchableOpacity activeOpacity={0.7} style={styles.button} onPress={() => router.push('/signup')}>
-          <Text style={styles.buttonText}>Let's Start 🚀</Text>
-        </TouchableOpacity>
+        <ChunkyButton 
+          title="Let's Start 🚀" 
+          onPress={() => router.push('/signup')} 
+          style={styles.button}
+        />
         
         <View style={styles.dividerContainer}>
           <View style={styles.dividerLine} />
@@ -29,9 +32,14 @@ export default function Splash() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity activeOpacity={0.7} style={[styles.button, styles.secondaryButton]} onPress={() => router.push('/login')}>
-          <Text style={[styles.buttonText, styles.secondaryButtonText]}>I ALREADY HAVE AN ACCOUNT</Text>
-        </TouchableOpacity>
+        <ChunkyButton 
+          title="I ALREADY HAVE AN ACCOUNT" 
+          onPress={() => router.push('/login')} 
+          style={styles.secondaryButton}
+          textStyle={styles.secondaryButtonText}
+          color="#f8fafc"
+          shadowColor="#d1e4fb"
+        />
       </View>
     </View>
   );
@@ -76,18 +84,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   button: {
-    backgroundColor: '#206b38', // Match the dark green button color
-    paddingVertical: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderBottomWidth: 4,
-    borderBottomColor: '#104d23',
     marginBottom: 16,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
   },
   buttonContainer: {
     marginBottom: 32,
@@ -109,11 +106,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   secondaryButton: {
-    backgroundColor: '#f8fafc',
-    borderBottomColor: '#d1e4fb',
     borderWidth: 2,
     borderColor: '#e2e8f0',
-    borderBottomWidth: 4,
   },
   secondaryButtonText: {
     color: '#004970',

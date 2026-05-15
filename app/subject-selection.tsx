@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useState, useEffect } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import ChunkyButton from './components/ChunkyButton';
 
 export default function SubjectSelection() {
   const router = useRouter();
@@ -32,9 +33,12 @@ export default function SubjectSelection() {
       
       <View style={styles.list}>
         {/* Maths */}
-        <TouchableOpacity 
-          activeOpacity={0.7} 
-          style={[styles.subjectCard, selectedSubject === 'maths' && styles.subjectCardSelected]}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.subjectCard, 
+            selectedSubject === 'maths' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
+          ]}
           onPress={() => setSelectedSubject('maths')}
         >
           <View style={[styles.iconContainer, { backgroundColor: '#fbbf24' }]}>
@@ -49,12 +53,15 @@ export default function SubjectSelection() {
             size={24} 
             color={selectedSubject === 'maths' ? "#006d37" : "#d1e4fb"} 
           />
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Physics */}
-        <TouchableOpacity 
-          activeOpacity={0.7} 
-          style={[styles.subjectCard, selectedSubject === 'physics' && styles.subjectCardSelected]}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.subjectCard, 
+            selectedSubject === 'physics' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
+          ]}
           onPress={() => setSelectedSubject('physics')}
         >
           <View style={[styles.iconContainer, { backgroundColor: '#4ade80' }]}>
@@ -69,12 +76,15 @@ export default function SubjectSelection() {
             size={24} 
             color={selectedSubject === 'physics' ? "#006d37" : "#d1e4fb"} 
           />
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Computer Science */}
-        <TouchableOpacity 
-          activeOpacity={0.7} 
-          style={[styles.subjectCard, selectedSubject === 'computer' && styles.subjectCardSelected]}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.subjectCard, 
+            selectedSubject === 'computer' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
+          ]}
           onPress={() => setSelectedSubject('computer')}
         >
           <View style={[styles.iconContainer, { backgroundColor: '#60a5fa' }]}>
@@ -89,16 +99,14 @@ export default function SubjectSelection() {
             size={24} 
             color={selectedSubject === 'computer' ? "#006d37" : "#d1e4fb"} 
           />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      <TouchableOpacity 
-        activeOpacity={0.7} 
-        style={styles.button}
+      <ChunkyButton 
+        title="Ready to Learn! ➔" 
         onPress={() => router.push('/quiz-selection')}
-      >
-        <Text style={styles.buttonText}>Ready to Learn! ➔</Text>
-      </TouchableOpacity>
+        style={styles.button}
+      />
       
       <Text style={styles.footerText}>
         By continuing, you agree to our privacy guidelines. SabakTutor keeps your learning journey anonymous and safe.
@@ -139,6 +147,11 @@ const styles = StyleSheet.create({
     borderColor: '#006d37',
     borderBottomWidth: 4,
   },
+  cardPressed: {
+    marginTop: 2,
+    marginBottom: -2,
+    opacity: 0.9,
+  },
   iconContainer: {
     width: 48,
     height: 48,
@@ -161,18 +174,7 @@ const styles = StyleSheet.create({
     color: '#3d4a3e',
   },
   button: {
-    backgroundColor: '#206b38',
-    paddingVertical: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderBottomWidth: 4,
-    borderBottomColor: '#104d23',
     marginBottom: 16,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
   },
   footerText: {
     fontSize: 10,
