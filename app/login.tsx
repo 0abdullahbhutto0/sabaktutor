@@ -1,12 +1,14 @@
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useRouter } from 'expo-router';
+import ChunkyButton from './components/ChunkyButton';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const handleLogin = async () => {
@@ -19,12 +21,12 @@ export default function Login() {
         router.replace('/grade-selection');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setError(error.message);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.header}>SabakTutor</Text>
       <Text style={styles.title}>Welcome Back</Text>
@@ -47,15 +49,18 @@ export default function Login() {
         value={password}
         onChangeText={setPassword}
       />
+      
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity activeOpacity={0.7} style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Login</Text>
-      </TouchableOpacity>
+      <ChunkyButton 
+        title="Sign In" 
+        onPress={handleLogin} 
+      />
 
       <TouchableOpacity activeOpacity={0.7} onPress={() => router.replace('/signup')} style={styles.linkContainer}>
         <Text style={styles.linkText}>Don't have an account? Sign up</Text>
       </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -98,19 +103,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#091d2e',
   },
-  button: {
-    backgroundColor: '#006d37',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderBottomWidth: 4,
-    borderBottomColor: '#005228',
-    marginTop: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+  error: {
+    color: '#b91c1c',
+    marginBottom: 16,
+    textAlign: 'center',
   },
   linkContainer: {
     marginTop: 24,
