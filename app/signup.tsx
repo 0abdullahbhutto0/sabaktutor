@@ -1,14 +1,16 @@
-import { View, Text, TextInput, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useRouter } from 'expo-router';
+import ChunkyButton from './components/ChunkyButton';
 
 export default function Signup() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const handleSignup = async () => {
@@ -31,12 +33,13 @@ export default function Signup() {
       });
       router.replace('/grade-selection');
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setError(error.message);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+      <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.header}>SabakTutor</Text>
       <Text style={styles.title}>Create your Profile</Text>
       <Text style={styles.subtitle}>Setup your logic-first identity</Text>
@@ -80,17 +83,21 @@ export default function Signup() {
         onChangeText={setPassword}
       />
 
-      <Pressable style={styles.button} onPress={handleSignup}>
-        <Text style={styles.buttonText}>Continue</Text>
-      </Pressable>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <ChunkyButton 
+        title="Continue" 
+        onPress={handleSignup} 
+        style={{ marginTop: 16 }}
+      />
 
       <Text style={styles.footer}>
         By continuing, you agree to our privacy guidelines. SabakTutor keeps your learning journey anonymous and safe.
       </Text>
-      <Pressable onPress={() => router.replace('/login')} style={styles.linkContainer}>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => router.replace('/login')} style={styles.linkContainer}>
         <Text style={styles.linkText}>Already have an account? Login</Text>
-      </Pressable>
-    </View>
+      </TouchableOpacity>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -100,6 +107,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f9ff',
     padding: 24,
     justifyContent: 'center',
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    marginBottom: 16,
   },
   header: {
     fontSize: 22,
@@ -138,19 +150,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#091d2e',
   },
-  button: {
-    backgroundColor: '#006d37',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderBottomWidth: 4,
-    borderBottomColor: '#005228',
-    marginTop: 16,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+  error: {
+    color: '#b91c1c',
+    marginBottom: 16,
+    textAlign: 'center',
   },
   footer: {
     marginTop: 24,

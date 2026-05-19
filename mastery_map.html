@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SabakTutor - Mastery Map</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "surface-container-highest": "#d1e4fb",
+                        "surface-variant": "#d1e4fb",
+                        "surface-tint": "#006d37",
+                        "inverse-surface": "#203243",
+                        "tertiary-container": "#5fbaff",
+                        "on-primary-fixed-variant": "#005228",
+                        "primary-fixed-dim": "#4ae183",
+                        "on-tertiary-fixed-variant": "#004b73",
+                        "primary-container": "#2ecc71",
+                        "primary": "#006d37",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#c9dcf3",
+                        "surface": "#f7f9ff",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#ffe084",
+                        "on-primary-container": "#005027",
+                        "outline": "#6c7b6d",
+                        "on-primary-fixed": "#00210c",
+                        "surface-container-low": "#edf4ff",
+                        "primary-fixed": "#6bfe9c",
+                        "secondary": "#735c00",
+                        "background": "#f7f9ff",
+                        "on-background": "#091d2e",
+                        "surface-container": "#e3efff",
+                        "on-tertiary-container": "#004970",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed": "#cce5ff",
+                        "on-secondary-fixed-variant": "#574500",
+                        "tertiary-fixed-dim": "#92ccff",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#d9eaff",
+                        "on-surface": "#091d2e",
+                        "on-secondary-fixed": "#231b00",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-container": "#fed023",
+                        "inverse-primary": "#4ae183",
+                        "outline-variant": "#bbcbbb",
+                        "secondary-fixed-dim": "#eec209",
+                        "surface-bright": "#f7f9ff",
+                        "error-container": "#ffdad6",
+                        "tertiary": "#006397",
+                        "on-surface-variant": "#3d4a3e",
+                        "on-tertiary-fixed": "#001d31",
+                        "on-secondary-container": "#6f5900",
+                        "inverse-on-surface": "#e8f2ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "12px",
+                        "base": "8px",
+                        "button-offset": "4px",
+                        "xs": "4px",
+                        "xl": "48px",
+                        "container-padding": "24px",
+                        "md": "20px",
+                        "lg": "32px"
+                    },
+                    "fontFamily": {
+                        "label-bold": ["Lexend"],
+                        "headline-lg": ["Lexend"],
+                        "display": ["Lexend"],
+                        "headline-md": ["Lexend"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "caption": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "display": ["40px", {"lineHeight": "48px", "letterSpacing": "-1px", "fontWeight": "700"}],
+                        "headline-md": ["22px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "500"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "caption": ["12px", {"lineHeight": "16px", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .chunky-shadow-primary {
+            box-shadow: 0 4px 0 0 #005228;
+        }
+        .chunky-shadow-secondary {
+            box-shadow: 0 4px 0 0 #6f5900;
+        }
+        .chunky-shadow-white {
+            box-shadow: 0 4px 0 0 #d1e4fb;
+        }
+        .node-path {
+            background-image: radial-gradient(circle at 2px 2px, #d1e4fb 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+        .truck-art-pattern {
+            opacity: 0.05;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23006d37' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-surface w-full sticky top-0 z-50 border-b-4 border-surface-container-highest flex items-center justify-between px-container-padding py-sm">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary cursor-pointer">menu</span>
+<h1 class="font-display text-headline-lg text-primary">SabakTutor</h1>
+</div>
+<div class="flex items-center gap-base">
+<div class="bg-secondary-container text-on-secondary-container px-sm py-xs rounded-full flex items-center gap-xs font-label-bold text-label-bold chunky-shadow-secondary">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                1200
+            </div>
+<div class="flex items-center gap-xs ml-2">
+<div class="w-8 h-8 rounded-full bg-tertiary-container flex items-center justify-center border-2 border-tertiary">
+<span class="material-symbols-outlined text-on-tertiary-container text-[20px]" style="font-variation-settings: 'FILL' 1;">psychology</span>
+</div>
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center border-2 border-primary">
+<span class="material-symbols-outlined text-on-primary-container text-[20px]" style="font-variation-settings: 'FILL' 1;">biotech</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow relative node-path overflow-hidden">
+<div class="absolute inset-0 truck-art-pattern pointer-events-none"></div>
+<!-- Mastery Map Path -->
+<div class="relative w-full max-w-md mx-auto py-xl px-container-padding flex flex-col items-center gap-xl">
+<!-- Node 1: Completed -->
+<div class="relative flex flex-col items-center">
+<div class="w-24 h-24 rounded-full bg-primary-container border-4 border-primary flex items-center justify-center chunky-shadow-primary active:translate-y-button-offset active:shadow-none transition-all cursor-pointer">
+<span class="material-symbols-outlined text-white text-[48px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="mt-base bg-white px-base py-xs rounded-lg border-2 border-surface-container-highest font-label-bold text-label-bold">
+                    Logic Basics
+                </div>
+<!-- Connector Down-Right -->
+<svg class="absolute -bottom-12 left-1/2 w-32 h-16 pointer-events-none" viewbox="0 0 100 50">
+<path d="M 50 0 Q 50 25 100 25" fill="transparent" stroke="#bbcbbb" stroke-dasharray="10 5" stroke-width="6"></path>
+</svg>
+</div>
+<!-- Node 2: Completed -->
+<div class="relative self-end mr-8 flex flex-col items-center">
+<div class="w-24 h-24 rounded-full bg-primary-container border-4 border-primary flex items-center justify-center chunky-shadow-primary active:translate-y-button-offset active:shadow-none transition-all cursor-pointer">
+<span class="material-symbols-outlined text-white text-[40px]">architecture</span>
+</div>
+<div class="mt-base bg-white px-base py-xs rounded-lg border-2 border-surface-container-highest font-label-bold text-label-bold">
+                    Geometry Art
+                </div>
+<!-- Connector Down-Left -->
+<svg class="absolute -bottom-12 right-1/2 w-48 h-16 pointer-events-none" viewbox="0 0 150 50">
+<path d="M 150 0 Q 150 25 0 25" fill="transparent" stroke="#bbcbbb" stroke-dasharray="10 5" stroke-width="6"></path>
+</svg>
+</div>
+<!-- Node 3: Current Active (Pulsing) -->
+<div class="relative self-start ml-4 flex flex-col items-center">
+<div class="relative">
+<div class="absolute inset-0 bg-secondary rounded-full animate-ping opacity-25"></div>
+<div class="w-28 h-28 rounded-full bg-secondary-container border-4 border-secondary flex items-center justify-center chunky-shadow-secondary active:translate-y-button-offset active:shadow-none transition-all cursor-pointer z-10 relative">
+<span class="material-symbols-outlined text-secondary text-[52px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+</div>
+<div class="mt-base bg-secondary text-white px-sm py-xs rounded-lg border-2 border-secondary font-label-bold text-label-bold flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                    Pattern Logic
+                </div>
+<!-- Connector Down-Center -->
+<svg class="absolute -bottom-12 left-1/2 w-32 h-16 pointer-events-none" viewbox="0 0 100 50">
+<path d="M 0 0 Q 0 25 50 25" fill="transparent" stroke="#bbcbbb" stroke-dasharray="10 5" stroke-width="6"></path>
+</svg>
+</div>
+<!-- Node 4: Locked -->
+<div class="relative flex flex-col items-center opacity-60">
+<div class="w-24 h-24 rounded-full bg-surface-container border-4 border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-outline-variant text-[40px]">lock</span>
+</div>
+<div class="mt-base bg-surface-container-high px-base py-xs rounded-lg border-2 border-outline-variant font-label-bold text-label-bold text-on-surface-variant">
+                    Advanced Physics
+                </div>
+<!-- Connector Down-Right -->
+<svg class="absolute -bottom-12 left-1/2 w-32 h-16 pointer-events-none" viewbox="0 0 100 50">
+<path d="M 50 0 Q 50 25 100 25" fill="transparent" stroke="#bbcbbb" stroke-dasharray="10 5" stroke-width="4"></path>
+</svg>
+</div>
+<!-- Node 5: Locked -->
+<div class="relative self-end mr-8 flex flex-col items-center opacity-40 mb-32">
+<div class="w-24 h-24 rounded-full bg-surface-container border-4 border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-outline-variant text-[40px]">lock</span>
+</div>
+<div class="mt-base bg-surface-container-high px-base py-xs rounded-lg border-2 border-outline-variant font-label-bold text-label-bold text-on-surface-variant">
+                    Ethical Hacking
+                </div>
+</div>
+</div>
+<!-- Floating Action Button -->
+<button class="fixed right-container-padding bottom-32 w-16 h-16 bg-primary text-white rounded-2xl chunky-shadow-primary flex items-center justify-center active:translate-y-button-offset active:shadow-none transition-all z-40">
+<span class="material-symbols-outlined text-[32px]">aq</span>
+</button>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface border-t-4 border-surface-container-highest flex justify-around items-end h-xl px-base pb-xs">
+<a class="flex flex-col items-center justify-center text-primary border-t-4 border-primary pt-2 font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">map</span>
+            Map
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-3 font-label-bold text-label-bold hover:bg-surface-container-low transition-colors rounded-lg px-2" href="#">
+<span class="material-symbols-outlined">biotech</span>
+            Lab
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-3 font-label-bold text-label-bold hover:bg-surface-container-low transition-colors rounded-lg px-2" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+            Leaderboard
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-3 font-label-bold text-label-bold hover:bg-surface-container-low transition-colors rounded-lg px-2" href="#">
+<span class="material-symbols-outlined">person</span>
+            Profile
+        </a>
+</nav>
+<!-- Decorative Image Card (Asymmetric) -->
+<div class="hidden lg:block fixed left-container-padding bottom-24 w-64 bg-white p-sm border-4 border-surface-container-highest rounded-xl chunky-shadow-white z-20 transform -rotate-2">
+<img class="w-full h-40 object-cover rounded-lg mb-base" data-alt="A vibrant, high-energy digital classroom scene with Pakistani students collaborating over glowing tablets in a brightly lit modern library. The background features colorful geometric patterns inspired by Karachi truck art with a focus on primary greens and sunny yellows. The atmosphere is industrious and inspiring, with soft natural light coming from large windows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQ28-eGNDSjFo7KJh08ZCJKo1EuJF0BTbMiGqvnDWzRwGg3f9QtNaBKjBpyuySaY8z_Fp8ROAwaRs9J1VKmvq8CsKVFb9iBH_kt73m0J-euZptNt-KPoKe0oA1FhvX4OdtI6VWQvBy9htZo-mlva0IiN_LwhWRlkY94eYAhPWZuRJK6h-sBunz6a4caeusfg2a5wSsG5kmVxwotQLKPPFq4JSXK-XhOCzBwi_Bqvuk5uYFH9q_BTxpzdeKySRDosVqFPZYSq0HNO8"/>
+<p class="font-label-bold text-label-bold text-primary">Mastery Tip #42</p>
+<p class="font-caption text-caption text-on-surface-variant">Focus on logic patterns to unlock the next Rickshaw Challenge!</p>
+</div>
+</body></html>

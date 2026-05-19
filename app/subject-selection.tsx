@@ -1,12 +1,15 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useState, useEffect } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useRouter } from 'expo-router';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import ChunkyButton from './components/ChunkyButton';
 
 export default function SubjectSelection() {
   const router = useRouter();
   const [username, setUsername] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState<string | null>('physics');
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -24,44 +27,91 @@ export default function SubjectSelection() {
     fetchUser();
   }, []);
 
-  const handleLogout = async () => {
-    await auth().signOut();
-    router.replace('/');
-  };
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>SabakTutor</Text>
-      {username ? <Text style={styles.greeting}>Hi {username},</Text> : null}
-      <Text style={styles.title}>Choose a Subject</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <Text style={styles.headerTitle}>SELECT YOUR SUBJECTS (SINDH TEXTBOOK BOARD)</Text>
       
-      <View style={styles.grid}>
-        <Pressable style={styles.card} onPress={() => router.push('/quiz-selection')}>
-          <Text style={styles.cardIcon}>💻</Text>
-          <Text style={styles.cardTitle}>Computer Science</Text>
+      <View style={styles.list}>
+        {/* Maths */}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.subjectCard, 
+            selectedSubject === 'maths' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
+          ]}
+          onPress={() => setSelectedSubject('maths')}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: '#fbbf24' }]}>
+            <MaterialCommunityIcons name="sigma" size={28} color="#091d2e" />
+          </View>
+          <View style={styles.textContainer}>
+            <Text style={styles.subjectTitle}>Maths</Text>
+            <Text style={styles.subjectSubtitle}>Logic & Problem Solving</Text>
+          </View>
+          <MaterialIcons 
+            name={selectedSubject === 'maths' ? "radio-button-checked" : "radio-button-unchecked"} 
+            size={24} 
+            color={selectedSubject === 'maths' ? "#006d37" : "#d1e4fb"} 
+          />
         </Pressable>
-        <Pressable style={[styles.card, styles.cardDisabled]} disabled={true}>
-          <Text style={styles.cardIcon}>📐</Text>
-          <Text style={styles.cardTitle}>Mathematics</Text>
+
+        {/* Physics */}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.subjectCard, 
+            selectedSubject === 'physics' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
+          ]}
+          onPress={() => setSelectedSubject('physics')}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: '#4ade80' }]}>
+            <MaterialCommunityIcons name="flask" size={28} color="#091d2e" />
+          </View>
+          <View style={styles.textContainer}>
+            <Text style={styles.subjectTitle}>Physics</Text>
+            <Text style={styles.subjectSubtitle}>Laws of Motion & Energy</Text>
+          </View>
+          <MaterialIcons 
+            name={selectedSubject === 'physics' ? "radio-button-checked" : "radio-button-unchecked"} 
+            size={24} 
+            color={selectedSubject === 'physics' ? "#006d37" : "#d1e4fb"} 
+          />
         </Pressable>
-        <Pressable style={[styles.card, styles.cardDisabled]} disabled={true}>
-          <Text style={styles.cardIcon}>⚛️</Text>
-          <Text style={styles.cardTitle}>Physics</Text>
-        </Pressable>
-        <Pressable style={[styles.card, styles.cardDisabled]} disabled={true}>
-          <Text style={styles.cardIcon}>🧪</Text>
-          <Text style={styles.cardTitle}>Chemistry</Text>
-        </Pressable>
-        <Pressable style={[styles.card, styles.cardDisabled]} disabled={true}>
-          <Text style={styles.cardIcon}>🧬</Text>
-          <Text style={styles.cardTitle}>Biology</Text>
+
+        {/* Computer Science */}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.subjectCard, 
+            selectedSubject === 'computer' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
+          ]}
+          onPress={() => setSelectedSubject('computer')}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: '#60a5fa' }]}>
+            <MaterialIcons name="laptop-mac" size={28} color="#091d2e" />
+          </View>
+          <View style={styles.textContainer}>
+            <Text style={styles.subjectTitle}>Computer Science</Text>
+            <Text style={styles.subjectSubtitle}>Coding & Systems</Text>
+          </View>
+          <MaterialIcons 
+            name={selectedSubject === 'computer' ? "radio-button-checked" : "radio-button-unchecked"} 
+            size={24} 
+            color={selectedSubject === 'computer' ? "#006d37" : "#d1e4fb"} 
+          />
         </Pressable>
       </View>
 
-      <Pressable style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </Pressable>
-    </View>
+      <ChunkyButton 
+        title="Ready to Learn! ➔" 
+        onPress={() => router.push('/quiz-selection')}
+        style={styles.button}
+      />
+      
+      <Text style={styles.footerText}>
+        By continuing, you agree to our privacy guidelines. SabakTutor keeps your learning journey anonymous and safe.
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -69,62 +119,67 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f7f9ff',
+  },
+  contentContainer: {
     padding: 24,
     paddingTop: 60,
   },
-  header: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#006d37',
-    marginBottom: 8,
-  },
-  greeting: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#3d4a3e',
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 32,
+  headerTitle: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#091d2e',
+    color: '#006d37',
+    marginBottom: 16,
+  },
+  list: {
+    gap: 16,
     marginBottom: 32,
   },
-  grid: {
+  subjectCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  card: {
-    width: '48%',
-    backgroundColor: '#ffffff',
-    padding: 24,
-    borderRadius: 16,
-    marginBottom: 16,
     alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: '#e3efff',
   },
-  cardDisabled: {
-    opacity: 0.5,
+  subjectCardSelected: {
+    borderColor: '#006d37',
+    borderBottomWidth: 4,
   },
-  cardIcon: {
-    fontSize: 40,
-    marginBottom: 12,
+  cardPressed: {
+    marginTop: 2,
+    marginBottom: -2,
+    opacity: 0.9,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#091d2e',
-  },
-  logoutButton: {
-    marginTop: 'auto',
-    paddingVertical: 16,
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
-  logoutText: {
-    color: '#e53935',
-    fontSize: 16,
-    fontWeight: '600',
+  textContainer: {
+    flex: 1,
+  },
+  subjectTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#091d2e',
+    marginBottom: 4,
+  },
+  subjectSubtitle: {
+    fontSize: 12,
+    color: '#3d4a3e',
+  },
+  button: {
+    marginBottom: 16,
+  },
+  footerText: {
+    fontSize: 10,
+    color: '#6c7b6d',
+    textAlign: 'center',
+    paddingHorizontal: 16,
   },
 });
