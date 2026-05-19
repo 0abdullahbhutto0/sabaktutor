@@ -111,7 +111,6 @@ class MonteCarloTreeSearch:
         self._best_node_id: Optional[str] = None
         self._best_score: float = 0.0
 
-        # Cache query embedding across all iterations
         self._query_embedding: Optional[np.ndarray] = None
         self._cached_query: Optional[str] = None
 
@@ -210,7 +209,6 @@ class MonteCarloTreeSearch:
         self._best_node_id = None
         self._best_score = 0.0
 
-        # Pre-compute query embedding once for all iterations
         self._cached_query = query
         self._query_embedding = self.value_function.embedding_manager.encode_query(query)
         if self._query_embedding.ndim == 2:
@@ -266,7 +264,6 @@ class MonteCarloTreeSearch:
             child = self.nodes[child_id]
 
             if child.visit_count == 0:
-                # Unvisited: prioritize by prior with decaying exploration
                 score = child.prior_probability * (1.0 + 0.5 / (parent_visits + 1))
             else:
                 score = child.get_uct_score(parent_visits, self.exploration_constant)
@@ -319,8 +316,7 @@ class MonteCarloTreeSearch:
         return 0.5
 
     def _evaluate_node(self, doc_node_id: str, query: str) -> float:
-        """Evaluate a node's relevance to the query using cached embedding."""
-        # Use the value function's cached query embedding path
+        """Evaluate a node's relevance to the query using embedding."""
         values = self.value_function.predict_values(query, [doc_node_id])
         return values.get(doc_node_id, 0.5)
 

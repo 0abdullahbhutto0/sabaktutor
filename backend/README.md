@@ -1,14 +1,13 @@
 # Hybrid Tree Search System
 
-A hybrid retrieval system combining LLM-based tree search with value-based prediction using Monte Carlo Tree Search (MCTS) for optimal document retrieval.
+A hybrid retrieval system with value-based prediction using Monte Carlo Tree Search (MCTS) for optimal document retrieval.
 
 ## Features
 
-- **Hybrid Search**: Combines speed of value-based methods with depth of LLM-based methods
+- **Hybrid Search**: Combines speed of value-based methods
 - **Monte Carlo Tree Search**: Uses MCTS for intelligent node selection and exploration
 - **Sentence Transformers**: Leverages pre-trained embeddings for semantic search
 - **Configurable Architecture**: Easy to customize weights, models, and search parameters
-- **Thread-Safe**: Supports parallel search operations
 
 ## Installation
 
@@ -23,11 +22,7 @@ sentence-transformers>=2.2.0
 torch>=1.9.0
 numpy>=1.21.0
 tqdm>=4.65.0
-google-genai
 ```
-
-Optional:
-- `google-genai` for Gemini API integration
 
 ## Architecture
 
@@ -78,9 +73,8 @@ Main entry point for search operations.
 
 ```python
 engine = HybridSearchEngine(config=config)
-engine.index_tree(tree)           # Index from DocumentTree
+engine.index_tree(tree)        
 response = engine.search(query, options)
-stats = engine.get_statistics()
 ```
 
 ### DocumentTree

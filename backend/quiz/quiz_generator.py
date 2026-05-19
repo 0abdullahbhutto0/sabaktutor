@@ -1,17 +1,20 @@
 """
-Quiz Generator Module (Optimized)
-====================================
-Generates Sindh Board MCQs from indexed document chunks using OpenRouter.
-**OPTIMIZED**: Sends all chunks in a SINGLE API call to avoid rate limits.
+Quiz Generator Module (Updated with Streaming + Balanced Correct Answers)
+==========================================================================
+Generates Sindh Board MCQs with:
+- Streaming LLM support
+- Balanced correct answer distribution (A, B, C, D)
+- No storage dependency
 """
 
 import json
 import uuid
 import random
-import requests
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
+
+from core.streaming_client import StreamingLLMClient
 
 
 class Difficulty(str, Enum):
@@ -83,6 +86,7 @@ class Quiz:
     duration_minutes: int = 20
     passing_percent: int = 60
     created_at: float = 0.0
+    book_id: str = ""
 
     def __post_init__(self):
         if not self.id:
@@ -106,6 +110,7 @@ class Quiz:
             "created_at": self.created_at,
             "total_marks": sum(q.marks for q in self.questions),
             "question_count": len(self.questions),
+            "book_id": self.book_id,
         }
 
     @classmethod
@@ -123,76 +128,34 @@ class Quiz:
             duration_minutes=data.get("duration_minutes", 20),
             passing_percent=data.get("passing_percent", 60),
             created_at=data.get("created_at", 0),
+            book_id=data.get("book_id", ""),
         )
 
 
-class OpenRouterLLMClient:
-    """Wrapper for OpenRouter API - supports multiple LLM providers."""
-
-    def __init__(self, api_key: str, model: str = "google/gemini-2.0-flash-001"):
-        self.api_key = api_key
-        self.model = model
-        self.base_url = "https://openrouter.ai/api/v1"
-
-    def complete(self, prompt: str, max_retries: int = 3) -> str:
-        """Send prompt and return text response via OpenRouter with retry logic."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://localhost",
-            "X-Title": "Sindh Board Quiz Generator"
-        }
-
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": "You are an expert educational content creator for Sindh Board Pakistan. Generate high-quality multiple choice questions."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 8000  # Increased for batch generation
-        }
-
-        import time
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=120
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data["choices"][0]["message"]["content"]
-            except requests.exceptions.HTTPError as e:
-                if response.status_code == 429:
-                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                    print(f"Rate limited. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(wait_time)
-                    continue
-                raise RuntimeError(f"OpenRouter API error: {e}")
-            except requests.exceptions.RequestException as e:
-                raise RuntimeError(f"OpenRouter API error: {e}")
-            except (KeyError, IndexError) as e:
-                raise RuntimeError(f"Invalid response format from OpenRouter: {e}")
-
-        raise RuntimeError("Max retries exceeded due to rate limiting.")
-
-
 class QuizGenerator:
-    """Generates MCQs from document tree using OpenRouter LLM. SINGLE API CALL per quiz."""
+    """
+    Generates MCQs with streaming LLM support and balanced correct answers.
+    No storage dependency — quizzes returned directly.
+    """
 
-    def __init__(self, api_key: str = "", questions_per_chunk: int = 2, model: str = "google/gemini-2.0-flash-001"):
+    def __init__(
+        self,
+        api_key: str = "",
+        questions_per_chunk: int = 2,
+        model: str = "google/gemini-2.0-flash-001",
+        use_streaming: bool = True,
+    ):
         self.api_key = api_key
         self.model = model
-        self.llm = OpenRouterLLMClient(api_key, model) if api_key else None
         self.questions_per_chunk = questions_per_chunk
+        self.use_streaming = use_streaming
+
+        self.llm = StreamingLLMClient(api_key, model) if api_key else None
 
     def set_key(self, api_key: str):
         """Update OpenRouter API key."""
         self.api_key = api_key
-        self.llm = OpenRouterLLMClient(api_key, self.model) if api_key else None
+        self.llm = StreamingLLMClient(api_key, self.model) if api_key else None
 
     def set_model(self, model: str):
         """Update OpenRouter model."""
@@ -200,13 +163,27 @@ class QuizGenerator:
         if self.llm:
             self.llm.model = model
 
-    def generate_chapter_quiz(self, document_tree, subject: str, grade: str,
-                              chapter_id: str, chapter_name: str) -> Quiz:
-        """Generate chapter-level quiz (20 MCQs) from SPECIFIC chapter only. SINGLE API CALL."""
+    def generate_chapter_quiz(
+        self,
+        document_tree,
+        subject: str,
+        grade: str,
+        chapter_id: str,
+        chapter_name: str,
+        book_id: str = "",
+        stream_callback: Optional[Any] = None,
+    ) -> Quiz:
+        """Generate chapter-level quiz with optional streaming."""
         chapter_nodes = self._get_chapter_nodes(document_tree, chapter_id)
-        questions = self._generate_all_in_one_call(chapter_nodes, target_count=20)
 
-        return Quiz(
+        if self.use_streaming and stream_callback:
+            questions = self._generate_streaming(
+                chapter_nodes, target_count=20, callback=stream_callback
+            )
+        else:
+            questions = self._generate_all_in_one_call(chapter_nodes, target_count=20)
+
+        quiz = Quiz(
             quiz_type="chapter",
             subject=subject,
             grade=grade,
@@ -216,18 +193,27 @@ class QuizGenerator:
             questions=questions,
             duration_minutes=20,
             passing_percent=60,
+            book_id=book_id,
         )
 
-    def generate_unit_quiz(self, document_tree, subject: str, grade: str,
-                           unit_chapters: List[Dict[str, str]]) -> Quiz:
-        """Generate unit quiz from multiple chapters (40 MCQs). SINGLE API CALL."""
+        return quiz
+
+    def generate_unit_quiz(
+        self,
+        document_tree,
+        subject: str,
+        grade: str,
+        unit_chapters: List[Dict[str, str]],
+        book_id: str = "",
+    ) -> Quiz:
+        """Generate unit quiz from multiple chapters."""
         all_nodes = []
         for ch in unit_chapters:
             all_nodes.extend(self._get_chapter_nodes(document_tree, ch["id"]))
 
         questions = self._generate_all_in_one_call(all_nodes, target_count=40)
 
-        return Quiz(
+        quiz = Quiz(
             quiz_type="unit",
             subject=subject,
             grade=grade,
@@ -237,15 +223,23 @@ class QuizGenerator:
             questions=questions,
             duration_minutes=45,
             passing_percent=50,
+            book_id=book_id,
         )
+        return quiz
 
-    def generate_full_book_quiz(self, document_tree, subject: str, grade: str,
-                                all_chapters: List[Dict[str, str]]) -> Quiz:
-        """Generate full book mock exam (60 MCQs). SINGLE API CALL."""
+    def generate_full_book_quiz(
+        self,
+        document_tree,
+        subject: str,
+        grade: str,
+        all_chapters: List[Dict[str, str]],
+        book_id: str = "",
+    ) -> Quiz:
+        """Generate full book mock exam."""
         all_nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.chunks]
         questions = self._generate_all_in_one_call(all_nodes, target_count=60)
 
-        return Quiz(
+        quiz = Quiz(
             quiz_type="full",
             subject=subject,
             grade=grade,
@@ -255,28 +249,9 @@ class QuizGenerator:
             questions=questions,
             duration_minutes=90,
             passing_percent=50,
+            book_id=book_id,
         )
-
-    def generate_weak_areas_quiz(self, questions_pool: List[MCQQuestion],
-                                  weak_topics: List[str], subject: str, grade: str) -> Optional[Quiz]:
-        """Generate retry quiz from weak topics only (5-10 MCQs)."""
-        weak_questions = [q for q in questions_pool if q.topic in weak_topics]
-        if len(weak_questions) < 3:
-            return None
-
-        selected = random.sample(weak_questions, min(10, len(weak_questions)))
-        for q in selected:
-            random.shuffle(q.options)
-
-        return Quiz(
-            quiz_type="weak",
-            subject=subject,
-            grade=grade,
-            title=f"Weak Areas Retry - {', '.join(weak_topics[:2])}",
-            questions=selected,
-            duration_minutes=10,
-            passing_percent=80,
-        )
+        return quiz
 
     def _get_chapter_nodes(self, document_tree, chapter_id: str) -> List[Any]:
         """Get all nodes that belong to a specific chapter."""
@@ -288,7 +263,6 @@ class QuizGenerator:
         if not self.llm:
             return []
 
-        # Collect all chunks with content
         all_chunks = []
         for node in nodes:
             for chunk in node.chunks:
@@ -302,35 +276,69 @@ class QuizGenerator:
         if not all_chunks:
             return []
 
-        # Select diverse chunks (but keep it reasonable for token limits)
-        # For most models, ~4000-8000 tokens context is safe
         max_chunks = min(len(all_chunks), max(target_count // 2, 5))
         step = max(1, len(all_chunks) // max_chunks) if len(all_chunks) > max_chunks else 1
         selected_chunks = [all_chunks[i] for i in range(0, len(all_chunks), step)][:max_chunks]
 
-        # Build ONE prompt with ALL chunks
         prompt = self._build_batch_prompt(selected_chunks, target_count)
 
-        # SINGLE API CALL
-        print(f"Generating {target_count} questions from {len(selected_chunks)} chunks in 1 API call...")
-        response = self.llm.complete(prompt)
+        response = self.llm.complete(prompt, max_tokens=8000)
 
-        # Parse all questions from single response
         questions = self._parse_batch_response(response, selected_chunks)
-
-        # Ensure we have exactly target_count
         questions = questions[:target_count]
-        return self._balance_difficulty(questions)
+        questions = self._balance_difficulty(questions)
+        questions = self._balance_correct_index(questions)
+
+        return questions
+
+    def _generate_streaming(
+        self,
+        nodes: List[Any],
+        target_count: int,
+        callback: Any,
+    ) -> List[MCQQuestion]:
+        """Generate questions with streaming output."""
+        if not self.llm:
+            return []
+
+        all_chunks = []
+        for node in nodes:
+            for chunk in node.chunks:
+                if chunk.content.strip():
+                    all_chunks.append({
+                        "chunk_id": chunk.id,
+                        "content": chunk.content,
+                        "node_title": node.title or "",
+                    })
+
+        max_chunks = min(len(all_chunks), max(target_count // 2, 5))
+        step = max(1, len(all_chunks) // max_chunks) if len(all_chunks) > max_chunks else 1
+        selected_chunks = [all_chunks[i] for i in range(0, len(all_chunks), step)][:max_chunks]
+
+        prompt = self._build_batch_prompt(selected_chunks, target_count)
+
+        full_response = []
+        token_count = 0
+
+        for token in self.llm.stream_complete(prompt, max_tokens=8000, on_token=callback):
+            full_response.append(token)
+            token_count += 1
+
+        response_text = "".join(full_response)
+        questions = self._parse_batch_response(response_text, selected_chunks)
+        questions = questions[:target_count]
+        questions = self._balance_difficulty(questions)
+        questions = self._balance_correct_index(questions)
+
+        return questions
 
     def _build_batch_prompt(self, chunks: List[Dict], total_questions: int) -> str:
-        """Build a SINGLE prompt containing ALL chunks to generate ALL questions at once."""
-
-        # Build chunks section
+        """Build a SINGLE prompt containing ALL chunks."""
         chunks_text = ""
         for i, chunk in enumerate(chunks, 1):
             chunks_text += f"\n--- CHUNK {i} ---\n"
             chunks_text += f"Title: {chunk['node_title']}\n"
-            chunks_text += f"Content: {chunk['content'][:800]}\n"  # Truncate to save tokens
+            chunks_text += f"Content: {chunk['content'][:800]}\n"
 
         easy_count = max(1, total_questions // 4)
         medium_count = total_questions // 2
@@ -350,6 +358,7 @@ RULES:
 - Options should be plausible distractors based on common student misconceptions
 - Include numerical/computational questions where content supports it
 - Questions should test understanding, not just memorization
+- The correct answer index MUST be fairly distributed across A(0), B(1), C(2), D(3) — do NOT make only B and C correct
 - Each question MUST reference which chunk it came from (use chunk number)
 
 DIFFICULTY DISTRIBUTION:
@@ -377,7 +386,6 @@ Respond with ONLY the JSON array. No markdown, no explanations, no code blocks."
         try:
             text = response.strip()
 
-            # Extract JSON from markdown code blocks if present
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
@@ -395,7 +403,6 @@ Respond with ONLY the JSON array. No markdown, no explanations, no code blocks."
                 if not any(o.is_correct for o in opts) and opts:
                     opts[0].is_correct = True
 
-                # Map chunk_ref to actual chunk_id
                 chunk_ref = qd.get("chunk_ref", 1)
                 chunk_idx = min(chunk_ref - 1, len(chunks) - 1) if chunk_ref > 0 else 0
                 source_chunk_id = chunks[chunk_idx]["chunk_id"] if chunks else ""
@@ -409,8 +416,6 @@ Respond with ONLY the JSON array. No markdown, no explanations, no code blocks."
                 ))
             return questions
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Failed to parse batch response: {e}")
-            print(f"Response preview: {response[:500]}...")
             return []
 
     def _balance_difficulty(self, questions: List[MCQQuestion]) -> List[MCQQuestion]:
@@ -432,3 +437,57 @@ Respond with ONLY the JSON array. No markdown, no explanations, no code blocks."
 
         random.shuffle(balanced)
         return balanced
+
+    def _balance_correct_index(self, questions: List[MCQQuestion]) -> List[MCQQuestion]:
+        """
+        Ensure correct answers are fairly distributed across A(0), B(1), C(2), D(3).
+        Not only B & C should be correct.
+        """
+        if not questions:
+            return questions
+
+        counts = {0: 0, 1: 0, 2: 0, 3: 0}
+        for q in questions:
+            correct_idx = next((i for i, o in enumerate(q.options) if o.is_correct), 0)
+            counts[correct_idx] = counts.get(correct_idx, 0) + 1
+
+        total = len(questions)
+        target_per_option = total // 4
+        remainder = total % 4
+
+        targets = {}
+        for i in range(4):
+            targets[i] = target_per_option + (1 if i < remainder else 0)
+
+        questions_by_correct = {0: [], 1: [], 2: [], 3: []}
+        for q in questions:
+            correct_idx = next((i for i, o in enumerate(q.options) if o.is_correct), 0)
+            questions_by_correct[correct_idx].append(q)
+
+        balanced_questions = []
+        excess = {i: max(0, len(questions_by_correct[i]) - targets[i]) for i in range(4)}
+        deficit = {i: max(0, targets[i] - len(questions_by_correct[i])) for i in range(4)}
+
+        for i in range(4):
+            to_add = min(len(questions_by_correct[i]), targets[i])
+            balanced_questions.extend(questions_by_correct[i][:to_add])
+            questions_by_correct[i] = questions_by_correct[i][to_add:]
+
+        for deficit_idx in range(4):
+            while deficit[deficit_idx] > 0:
+                for excess_idx in range(4):
+                    if excess[excess_idx] > 0 and questions_by_correct[excess_idx]:
+                        q = questions_by_correct[excess_idx].pop(0)
+                        for opt in q.options:
+                            opt.is_correct = False
+                        q.options[deficit_idx].is_correct = True
+                        balanced_questions.append(q)
+                        excess[excess_idx] -= 1
+                        deficit[deficit_idx] -= 1
+                        break
+
+        for i in range(4):
+            balanced_questions.extend(questions_by_correct[i])
+
+        random.shuffle(balanced_questions)
+        return balanced_questions

@@ -2,9 +2,9 @@
 
 # dependencies
 node_modules/
-rag/venv
-rag/.env
-rag/hybrid_tree_search/__pycache__
+/backend/venv
+/backend/.env
+/backend/__pycache__/
 # Expo
 .expo/
 dist/
