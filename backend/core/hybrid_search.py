@@ -1,9 +1,5 @@
 """
 Hybrid Search Engine Module
-===========================
-Implements the hybrid search system combining:
-1. Value-based tree search (fast, using embeddings)
-2. Monte Carlo Tree Search for orchestration
 """
 
 from typing import List, Dict, Optional, Set, Any
@@ -12,12 +8,11 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
 
-from .config import SearchConfig
-from .tree import DocumentTree
-from .embeddings import EmbeddingManager
-from .value_function import ValueFunction
-from .mcts import MonteCarloTreeSearch, SearchResult
 
+from core.tree import DocumentTree
+from core.embeddings import EmbeddingManager
+from core.value_function import ValueFunction
+from core.mcts import MonteCarloTreeSearch, SearchResult
 
 @dataclass
 class SearchOptions:
@@ -51,7 +46,6 @@ class SearchResponse:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "query": self.query,
             "results": self.results,
@@ -66,16 +60,18 @@ class SearchResponse:
 class HybridSearchEngine:
     """
     Hybrid search engine combining value-based and MCTS-based tree search.
-
-    Orchestrates parallel value-based search and MCTS with diversity-aware ranking.
+    Now with full logging and multi-book support.
     """
 
     def __init__(
         self,
-        config: Optional[SearchConfig] = None,
+        config: Optional[Any] = None,
         embedding_manager: Optional[EmbeddingManager] = None,
+        vector_store_path: str = "./vector_index",
+        book_id: str = "default",
     ):
-        self.config = config or SearchConfig()
+        self.book_id = book_id
+        self.config = config or self._default_config()
         self.embedding_manager = embedding_manager or EmbeddingManager(
             model_name=self.config.embedding.model_name,
             normalize=self.config.embedding.normalize_embeddings,
@@ -86,6 +82,7 @@ class HybridSearchEngine:
             embedding_manager=self.embedding_manager,
             top_k=self.config.top_k_chunks,
             use_sqrt_normalization=self.config.use_square_root_normalization,
+            vector_store_path=vector_store_path,
         )
 
         self.mcts = MonteCarloTreeSearch(
@@ -104,18 +101,34 @@ class HybridSearchEngine:
         self._visited_nodes: Set[str] = set()
         self._lock = threading.RLock()
         self.search_stats: Dict[str, Any] = {}
+        
 
-    def index_tree(self, tree: DocumentTree, show_progress: bool = False) -> None:
-        """Index a document tree for search."""
+    def _default_config(self):
+        """Default configuration."""
+        from config import SearchConfig
+        return SearchConfig()
+
+    def index_tree(self, tree: DocumentTree, show_progress: bool = False) -> Dict[str, Any]:
+        """Index a document tree for search with full logging."""
         with self._lock:
             self.tree = tree
-            self.value_function.index_tree(tree, show_progress)
+            timing = self.value_function.index_tree(tree, show_progress)
             self._indexed = True
+                
+            stats = {
+                "total_nodes": tree.get_node_count(),
+                "total_chunks": timing.chunks_created + timing.chunks_loaded_from_store,
+                "new_embeddings": timing.chunks_embedded,
+                "loaded_from_store": timing.chunks_loaded_from_store,
+                "indexing_time_ms": timing.total_time_ms,
+            }
+            return stats
 
     def search(self, query: str, options: Optional[SearchOptions] = None) -> SearchResponse:
-        """Perform hybrid search."""
-        start_time = time.time()
+        """Perform hybrid search with comprehensive logging."""
         options = options or SearchOptions()
+            
+        start_time = time.time()
 
         if not self._indexed:
             raise ValueError("No documents indexed. Call index_tree() first.")
@@ -125,8 +138,8 @@ class HybridSearchEngine:
 
         results = self._search_hybrid(query, options)
         search_time = time.time() - start_time
-
-        return SearchResponse(
+            
+        response = SearchResponse(
             query=query,
             results=results,
             search_time=search_time,
@@ -139,8 +152,10 @@ class HybridSearchEngine:
                     "value_weight": options.value_weight,
                     "diversity_weight": options.diversity_weight,
                 },
+                "book_id": self.book_id,
             },
-        )
+        )     
+        return response
 
     def _search_hybrid(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
         """Perform hybrid search combining value-based and MCTS-based approaches."""
@@ -180,7 +195,6 @@ class HybridSearchEngine:
 
         candidates = list(results.values())
 
-        # Apply diversity bonus based on path prefixes
         path_prefixes = {}
         for candidate in candidates:
             path = candidate.get("path", [])
@@ -228,8 +242,6 @@ class HybridSearchEngine:
                     "content": node.content,
                     "depth": node.depth,
                     "title": node.title,
-                    "start_index": node.start_index,
-                    "end_index": node.end_index,
                     "num_chunks": node.num_chunks,
                 })
                 self._visited_nodes.add(node_id)
@@ -241,6 +253,7 @@ class HybridSearchEngine:
         """Get search engine statistics."""
         with self._lock:
             return {
+                "book_id": self.book_id,
                 "mcts_stats": self.mcts.get_statistics(),
                 "indexed": self._indexed,
                 "index_size": self.value_function.index_size,
@@ -259,10 +272,17 @@ class HybridSearchEngine:
 
 def create_hybrid_engine(
     embedding_model: str = "BAAI/bge-small-en-v1.5",
-    config: Optional[SearchConfig] = None,
+    config: Optional[Any] = None,
+    vector_store_path: str = "./vector_index",
+    book_id: str = "default",
 ) -> HybridSearchEngine:
     """Factory function to create a hybrid search engine."""
     if config is None:
+        from config import SearchConfig
         config = SearchConfig()
     config.embedding.model_name = embedding_model
-    return HybridSearchEngine(config=config)
+    return HybridSearchEngine(
+        config=config,
+        vector_store_path=vector_store_path,
+        book_id=book_id,
+    )

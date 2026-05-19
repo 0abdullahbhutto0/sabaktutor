@@ -5,10 +5,12 @@ Implements the hierarchical tree structure for documents with support for
 chunks and node metadata.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field,asdict
 from typing import Optional, List, Dict, Any
 from enum import Enum
 import uuid
+import json
+
 
 
 class NodeType(str, Enum):
@@ -63,9 +65,8 @@ class TreeNode:
     chunks: List[Chunk] = field(default_factory=list)
     depth: int = 0
     path: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    start_index: int = 0
-    end_index: int = 0
+    start_index: int = 0,
+    end_index: int = 0,
 
     def __post_init__(self):
         if not self.id:
@@ -95,9 +96,8 @@ class TreeNode:
             "chunks": [c.to_dict() for c in self.chunks],
             "depth": self.depth,
             "path": self.path,
-            "metadata": self.metadata,
             "start_index": self.start_index,
-            "end_index": self.end_index,
+            "end_index": self.end_index
         }
 
     @classmethod
@@ -114,8 +114,6 @@ class TreeNode:
             depth=data.get("depth", 0),
             path=data.get("path", ""),
             metadata=data.get("metadata", {}),
-            start_index=data.get("start_index", 0),
-            end_index=data.get("end_index", 0),
         )
 
 
@@ -189,7 +187,6 @@ class DocumentTree:
             indent = "  " * depth
             node_id = node.metadata.get("node_id", node.id)
 
-            # Build info line
             title = node.title or "Untitled"
             chunk_count = len(node.chunks)
             content_preview = ""
@@ -201,7 +198,6 @@ class DocumentTree:
 
             lines.append(f"{indent}{prefix}[{node_id}] {title} ({chunk_count} chunks){content_preview}")
 
-            # Recurse to children
             for i, child_id in enumerate(node.children_ids):
                 child = self.nodes.get(child_id)
                 if child:
@@ -209,7 +205,6 @@ class DocumentTree:
                     child_prefix = "└── " if is_last else "├── "
                     format_node(child, depth + 1, child_prefix)
 
-        # Start from root's children (chapters)
         for i, child_id in enumerate(root.children_ids):
             child = self.nodes.get(child_id)
             if child:
@@ -261,12 +256,10 @@ class DocumentTree:
         """
         chapter_nodes = []
 
-        # Verify the node exists and is a direct child of root (i.e., a chapter)
         chapter_node = self.nodes.get(chapter_node_id)
         if not chapter_node:
             return []
 
-        # Collect chapter + all descendants recursively
         def collect_descendants(node_id: str):
             node = self.nodes.get(node_id)
             if not node:
@@ -315,3 +308,91 @@ class DocumentTree:
         )
         tree.nodes = {k: TreeNode.from_dict(v) for k, v in data["nodes"].items()}
         return tree
+    
+    def get_tree_size_bytes(self) -> int:
+        """
+        Returns approximate serialized size of the tree in bytes.
+        """
+
+        tree_dict = self.to_dict()
+
+        json_str = json.dumps(tree_dict, ensure_ascii=False)
+
+        return len(json_str.encode("utf-8"))
+
+
+    def get_tree_size(self) -> dict:
+        """
+        Returns tree size in bytes, KB, MB.
+        """
+
+        size_bytes = self.get_tree_size_bytes()
+
+        return {
+            "bytes": size_bytes,
+            "kb": size_bytes / 1024,
+            "mb": size_bytes / (1024 * 1024),
+        }
+
+    def print_tree_size(self):
+        size = self.get_tree_size()
+
+        print("\n💾 TREE MEMORY SIZE")
+        print("=" * 40)
+        print(f"Bytes : {size['bytes']}")
+        print(f"KB    : {size['kb']:.2f}")
+        print(f"MB    : {size['mb']:.4f}")
+
+    def print_subtree(
+        self,
+        node_id: str,
+        max_depth: int = 10,
+        max_content_length: int = 80,
+    ):
+        """
+        Fully dynamic subtree printer (prints ALL fields automatically).
+        Works even if TreeNode schema changes.
+        """
+
+        root = self.nodes.get(node_id)
+        if not root:
+            print("Node not found")
+            return
+
+        print("\n🌳 DYNAMIC FULL SUBTREE DEBUG VIEW")
+        print("=" * 80)
+
+        def format_value(value):
+            """Make any value readable."""
+            if isinstance(value, str):
+                value = value.replace("\n", " ")
+                return value[:max_content_length] + ("..." if len(value) > max_content_length else "")
+            elif isinstance(value, list):
+                return f"[list len={len(value)}] {value[:5]}"
+            elif isinstance(value, dict):
+                return json.dumps(value, ensure_ascii=False)[:200]
+            else:
+                return str(value)
+
+        def dfs(node, depth: int):
+            if depth > max_depth:
+                return
+
+            indent = "  " * depth
+
+            node_dict = asdict(node)
+
+            print(f"\n{indent} NODE ({node.__class__.__name__})")
+            print(f"{indent}" + "-" * 60)
+
+            for key, value in node_dict.items():
+                print(f"{indent}{key:<15}: {format_value(value)}")
+
+            for child_id in node.children_ids:
+                child = self.nodes.get(child_id)
+                if child:
+                    dfs(child, depth + 1)
+
+        dfs(root, 0)
+
+        print("\n" + "=" * 80)

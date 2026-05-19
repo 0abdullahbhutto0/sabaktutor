@@ -1,14 +1,16 @@
 """
 Value Function and Node Scorer Module
 =====================================
-Implements the value prediction function for Monte Carlo Tree Search
-using embedding-based relevance scoring.
+Now uses FAISS vector store to persist embeddings.
+Falls back to computing if not in store.
 """
 
 from typing import List, Dict, Optional, Any
 import numpy as np
 from dataclasses import dataclass
 import threading
+import time
+from core.vector_store import FaissVectorStore
 
 
 @dataclass
@@ -28,8 +30,8 @@ class NodeScore:
 
 
 class NodeScorer:
-    """Scores nodes based on their associated chunks using vector search."""
-
+    """Unchanged — business logic stays the same."""
+    
     def __init__(self, use_sqrt_normalization: bool = True):
         self.use_sqrt_normalization = use_sqrt_normalization
 
@@ -84,58 +86,99 @@ class NodeScorer:
         return node_scores
 
 
+@dataclass
+class IndexTiming:
+    """Tracks timing for index_tree operations."""
+    total_time_ms: float = 0.0
+    node_iteration_time_ms: float = 0.0
+    text_chunking_time_ms: float = 0.0
+    embedding_generation_time_ms: float = 0.0
+    index_build_time_ms: float = 0.0
+    nodes_processed: int = 0
+    chunks_created: int = 0
+    chunks_embedded: int = 0
+    chunks_pre_embedded: int = 0
+    chunks_loaded_from_store: int = 0  
+
+    def report(self) -> str:
+        """Pretty print timing report."""
+        return f"""
+╔══════════════════════════════════════════════════════════════╗
+║                    INDEXING TIMING REPORT                    ║
+╠══════════════════════════════════════════════════════════════╣
+║  Total Time              : {self.total_time_ms:.2f} ms ({self.total_time_ms/1000:.2f}s)
+║  Node Iteration          : {self.node_iteration_time_ms:.2f} ms
+║  Text Chunking           : {self.text_chunking_time_ms:.2f} ms
+║  Embedding Generation    : {self.embedding_generation_time_ms:.2f} ms
+║  Index Build             : {self.index_build_time_ms:.2f} ms
+╠══════════════════════════════════════════════════════════════╣
+║  Nodes Processed         : {self.nodes_processed}
+║  Chunks Created          : {self.chunks_created}
+║  Chunks Embedded         : {self.chunks_embedded}
+║  Pre-embedded Chunks     : {self.chunks_pre_embedded}
+║  Loaded from Store       : {self.chunks_loaded_from_store}  ← NEW
+╚══════════════════════════════════════════════════════════════╝
+        """
+
+
 class ValueFunction:
-    """Main value function for predicting node relevance using embeddings."""
+    """
+    Main value function for predicting node relevance using embeddings.
+    NOW USES FAISS VECTOR STORE for persistence.
+    """
 
     def __init__(
         self,
         embedding_manager,
         top_k: int = 10,
         use_sqrt_normalization: bool = True,
+        vector_store_path: str = "./vector_index",
     ):
         self.embedding_manager = embedding_manager
         self.top_k = top_k
         self.scorer = NodeScorer(use_sqrt_normalization=use_sqrt_normalization)
 
-        self._chunk_embeddings: Optional[np.ndarray] = None
-        self._chunk_node_map: List[str] = []
-        self._chunk_contents: List[str] = []
+        self.vector_store = FaissVectorStore(
+            index_path=vector_store_path,
+            embedding_dim=getattr(embedding_manager, 'embedding_dim', 384),
+        )
+
         self._document_tree: Optional[Any] = None
         self._lock = threading.Lock()
 
-        # Cache for query embeddings to avoid re-encoding across MCTS iterations
         self._query_embedding_cache: Optional[np.ndarray] = None
         self._cached_query: Optional[str] = None
+        
+        self.last_timing: Optional[IndexTiming] = None
 
     def index_chunks(self, chunks: List[Dict], node_ids: List[str]) -> None:
-        """Index chunks for fast vector search."""
+        """Index chunks — now adds to FAISS store."""
         if not chunks:
             return
 
         with self._lock:
-            embeddings = []
-            self._chunk_contents = []
-            self._chunk_node_map = []
-
             for chunk, node_id in zip(chunks, node_ids):
                 content = chunk.get("content", "")
                 embedding = chunk.get("embedding")
-
+                
                 if embedding is not None:
-                    if isinstance(embedding, list):
-                        embeddings.append(embedding)
-                    else:
-                        embeddings.append(embedding.tolist())
-                    self._chunk_contents.append(content)
-                    self._chunk_node_map.append(node_id)
+                    self.vector_store.add(
+                        record_id=node_id,
+                        vector=embedding if isinstance(embedding, np.ndarray) else np.array(embedding),
+                        content=content,
+                        metadata={"node_id": node_id},
+                    )
 
-            if embeddings:
-                self._chunk_embeddings = np.array(embeddings, dtype=np.float32)
-            else:
-                self._chunk_embeddings = None
-
-    def index_tree(self, tree, show_progress: bool = False) -> None:
-        """Index all chunks from a document tree."""
+    def index_tree(self, tree, show_progress: bool = False) -> IndexTiming:
+        """
+        Index all chunks from a document tree.
+        Uses vector store — loads existing embeddings, computes only missing ones.
+        """
+        timing = IndexTiming()
+        start_total = time.perf_counter()
+        
+        print("\n🚀 [INDEX TREE START]")
+        print(f"Total nodes in tree: {tree.get_node_count()}")
         self._document_tree = tree
 
         all_chunks = []
@@ -145,8 +188,10 @@ class ValueFunction:
 
         chunk_size = 200
         chunk_overlap = 30
+        
+        start_nodes = time.perf_counter()
 
-        for node in tree.get_all_nodes():
+        for i, node in enumerate(tree.get_all_nodes()):
             if node.is_root:
                 continue
 
@@ -154,55 +199,64 @@ class ValueFunction:
             if not content:
                 continue
 
+            timing.nodes_processed += 1
+
             if node.chunks:
                 for chunk in node.chunks:
-                    if chunk.embedding is not None:
-                        all_chunks.append({
-                            "content": chunk.content,
-                            "embedding": chunk.embedding,
-                        })
-                        all_node_ids.append(node.id)
-                    else:
-                        content_to_encode = chunk.content
-                        if content_to_encode:
-                            contents_to_encode.append(content_to_encode)
-                            contents_map[content_to_encode] = node.id
+                    if chunk.content.strip():
+                        if self.vector_store.exists(node.id):
+                            timing.chunks_pre_embedded += 1
+                            timing.chunks_loaded_from_store += 1                       
+                        else:
+                            contents_to_encode.append(chunk.content)
+                            contents_map[chunk.content] = node.id
             else:
                 node_chunks = self._chunk_text(content, chunk_size, chunk_overlap)
+                timing.chunks_created += len(node_chunks)
+                
                 for chunk_text in node_chunks:
                     if not chunk_text.strip():
                         continue
-                    if chunk_text in contents_map:
-                        continue
-                    contents_to_encode.append(chunk_text)
-                    contents_map[chunk_text] = node.id
+                    if self.vector_store.exists(node.id):
+                        timing.chunks_loaded_from_store += 1
+                    else:
+                        contents_to_encode.append(chunk_text)
+                        contents_map[chunk_text] = node.id
 
-        if show_progress:
-            print(f"Total chunks to encode: {len(contents_to_encode)}")
+        timing.node_iteration_time_ms = (time.perf_counter() - start_nodes) * 1000
 
+        print(f"\n📊 PRE-EMBEDDING SUMMARY")
+        print(f"To embed: {len(contents_to_encode)}")
+        print(f"Already in store: {timing.chunks_loaded_from_store}")
+        
         if contents_to_encode:
-            if show_progress:
-                print(f"Encoding {len(contents_to_encode)} chunks...")
-
+            print(f"\nGENERATING {len(contents_to_encode)} NEW EMBEDDINGS...")
+            
+            start_embed = time.perf_counter()
             embeddings = self.embedding_manager.encode(
                 contents_to_encode,
                 batch_size=32,
                 show_progress=show_progress
             )
-
+            timing.embedding_generation_time_ms = (time.perf_counter() - start_embed) * 1000
+            timing.chunks_embedded = len(contents_to_encode)
             for i, content in enumerate(contents_to_encode):
                 node_id = contents_map[content]
                 embedding = embeddings[i] if len(embeddings.shape) > 1 else embeddings
-                all_chunks.append({
-                    "content": content,
-                    "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else embedding,
-                })
-                all_node_ids.append(node_id)
+             
+                if not self.vector_store.exists(node_id):
+                    self.vector_store.add(
+                        record_id=node_id,
+                        vector=embedding if isinstance(embedding, np.ndarray) else np.array(embedding),
+                        content=content,
+                        metadata={"node_id": node_id},
+                    )
+        self.vector_store.save()
+                
+        timing.total_time_ms = (time.perf_counter() - start_total) * 1000
+        self.last_timing = timing
 
-        self.index_chunks(all_chunks, all_node_ids)
-
-        if show_progress:
-            print(f"Indexed {len(all_chunks)} chunks from tree")
+        return timing
 
     def _chunk_text(self, text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]:
         """Split text into overlapping chunks."""
@@ -237,7 +291,6 @@ class ValueFunction:
         if self._cached_query == query and self._query_embedding_cache is not None:
             return self._query_embedding_cache
 
-        # Use the embedding manager's cache for single queries
         query_embedding = self.embedding_manager.encode_query(query)
         if query_embedding.ndim == 2:
             query_embedding = query_embedding[0]
@@ -251,35 +304,26 @@ class ValueFunction:
         query: str,
         candidate_nodes: List[str],
     ) -> Dict[str, float]:
-        """Predict value estimates for candidate nodes."""
-        if not candidate_nodes or self._chunk_embeddings is None:
+        """
+        Predict value estimates for candidate nodes.
+        NOW USES FAISS SEARCH instead of manual cosine similarity.
+        """
+        if not candidate_nodes or self.vector_store.count() == 0:
             return {node_id: 0.5 for node_id in candidate_nodes}
 
-        # Use cached query embedding (avoids re-encoding in MCTS loops)
         query_embedding = self._get_query_embedding(query)
 
-        similarities = self.embedding_manager.compute_similarity(
-            query_embedding, self._chunk_embeddings
-        )
-
-        top_indices = np.argsort(similarities)[::-1][:self.top_k]
-
+        results = self.vector_store.search(query_embedding, top_k=self.top_k)
         chunk_scores_map: Dict[str, List[ChunkScore]] = {}
-        for idx in top_indices:
-            similarity = float(similarities[idx])
-            if similarity <= 0:
-                continue
-
-            node_id = self._chunk_node_map[idx]
+        for node_id, score, content in results:
             chunk_score = ChunkScore(
                 node_id=node_id,
-                score=similarity,
-                content=self._chunk_contents[idx],
+                score=score,
+                content=content,
             )
             if node_id not in chunk_scores_map:
                 chunk_scores_map[node_id] = []
             chunk_scores_map[node_id].append(chunk_score)
-
         node_scores = []
         for node_id in candidate_nodes:
             if node_id in chunk_scores_map:
@@ -299,9 +343,7 @@ class ValueFunction:
     def clear_index(self) -> None:
         """Clear the chunk index and document tree reference."""
         with self._lock:
-            self._chunk_embeddings = None
-            self._chunk_node_map = []
-            self._chunk_contents = []
+            self.vector_store.clear()
             self._document_tree = None
             self._query_embedding_cache = None
             self._cached_query = None
@@ -309,6 +351,4 @@ class ValueFunction:
     @property
     def index_size(self) -> int:
         """Get the number of indexed chunks."""
-        if self._chunk_embeddings is None:
-            return 0
-        return len(self._chunk_embeddings)
+        return self.vector_store.count()
