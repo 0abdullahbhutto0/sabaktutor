@@ -17,14 +17,6 @@ class Prompts:
 You explain concepts clearly, use examples relevant to Pakistani students, and encourage critical thinking.
 Your answers should be accurate according to the Sindh Board textbook and appropriate for {grade}th grade students."""
 
-    @staticmethod
-    def quiz_system(subject: str = "Computer Science", grade: str = "9") -> str:
-        """System prompt for quiz generation."""
-        return f"""You are an expert {subject} teacher for Sindh Board {grade}th grade.
-You create high-quality MCQs that test understanding, not just memorization.
-Questions should be based strictly on the provided textbook content.
-Use common student misconceptions as distractors.
-Include numerical and computational questions where applicable."""
 
     @staticmethod
     def ask_stream(

@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Path, Line } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { preloadNextQuizzes } from './services/quizService';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 const { width } = Dimensions.get('window');
 const MAP_WIDTH = Math.min(width - 48, 400); // Responsive max width
@@ -13,6 +16,48 @@ const NODE_SIZE = 96;
 
 export default function MasteryMap() {
   const router = useRouter();
+
+  const [progress, setProgress] = React.useState<Record<string, boolean>>({});
+  const [masteryPoints, setMasteryPoints] = React.useState<number>(0);
+
+  useEffect(() => {
+    preloadNextQuizzes(0);
+    
+    const user = auth().currentUser;
+    if (!user) return;
+
+    // Listen to user progress and scores
+    const unsubscribe = firestore()
+      .collection('users')
+      .doc(user.uid)
+      .collection('progress')
+      .onSnapshot((snapshot) => {
+        const newProgress: Record<string, boolean> = {};
+        let totalPoints = 0;
+        
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.passed) {
+            newProgress[doc.id] = true;
+          }
+          if (typeof data.score === 'number') {
+            totalPoints += data.score * 10;
+          }
+        });
+        
+        setProgress(newProgress);
+        setMasteryPoints(totalPoints);
+      });
+
+    return () => unsubscribe();
+  }, []);
+
+  const levels = ['ch1', 'ch2', 'ch3', 'ch4', 'ch5'];
+  
+  // A level is completed if it's in progress.
+  // A level is unlocked if it's ch1, or the previous level is completed.
+  const isCompleted = (levelId: string) => !!progress[levelId];
+  const isUnlocked = (index: number) => index === 0 || isCompleted(levels[index - 1]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -27,7 +72,7 @@ export default function MasteryMap() {
         <View style={styles.headerRight}>
           <View style={styles.energyBadge}>
             <MaterialIcons name="bolt" size={18} color="#6f5900" />
-            <Text style={styles.energyText}>1200</Text>
+            <Text style={styles.energyText}>{masteryPoints}</Text>
           </View>
         </View>
       </View>
@@ -36,78 +81,145 @@ export default function MasteryMap() {
         <View style={{ width: MAP_WIDTH, height: 600, alignSelf: 'center', position: 'relative' }}>
           {/* Dashed Path (SVG) */}
           <Svg height="600" width={MAP_WIDTH} style={{ position: 'absolute', top: NODE_SIZE / 2, left: 0 }}>
-            {/* Center to Right */}
+            {/* Center to Right (ch1 to ch2) */}
             <Path 
               d={`M ${CENTER_X} 0 C ${CENTER_X} 50, ${RIGHT_X} 50, ${RIGHT_X} 120`}
-              stroke="#bbcbbb" strokeWidth="4" strokeDasharray="8 8" fill="none"
+              stroke={isUnlocked(1) ? "#006d37" : "#bbcbbb"} 
+              strokeWidth={isUnlocked(1) ? "6" : "4"} 
+              strokeDasharray={isUnlocked(1) ? "" : "8 8"} 
+              fill="none"
             />
-            {/* Right to Left */}
+            {/* Right to Center (ch2 to ch3) */}
             <Path 
-              d={`M ${RIGHT_X} 120 C ${RIGHT_X} 180, ${LEFT_X} 180, ${LEFT_X} 240`}
-              stroke="#bbcbbb" strokeWidth="4" strokeDasharray="8 8" fill="none"
+              d={`M ${RIGHT_X} 120 C ${RIGHT_X} 180, ${CENTER_X} 180, ${CENTER_X} 240`}
+              stroke={isUnlocked(2) ? "#006d37" : "#bbcbbb"} 
+              strokeWidth={isUnlocked(2) ? "6" : "4"} 
+              strokeDasharray={isUnlocked(2) ? "" : "8 8"} 
+              fill="none"
             />
-            {/* Left to Center */}
+            {/* Center to Left (ch3 to ch4) */}
             <Path 
-              d={`M ${LEFT_X} 240 C ${LEFT_X} 300, ${CENTER_X} 300, ${CENTER_X} 360`}
-              stroke="#bbcbbb" strokeWidth="4" strokeDasharray="8 8" fill="none"
+              d={`M ${CENTER_X} 240 C ${CENTER_X} 300, ${LEFT_X} 300, ${LEFT_X} 360`}
+              stroke={isUnlocked(3) ? "#006d37" : "#bbcbbb"} 
+              strokeWidth={isUnlocked(3) ? "6" : "4"} 
+              strokeDasharray={isUnlocked(3) ? "" : "8 8"} 
+              fill="none"
             />
-            {/* Center to Right */}
+            {/* Left to Center (ch4 to ch5) */}
             <Path 
-              d={`M ${CENTER_X} 360 C ${CENTER_X} 420, ${RIGHT_X} 420, ${RIGHT_X} 480`}
-              stroke="#bbcbbb" strokeWidth="4" strokeDasharray="8 8" fill="none"
+              d={`M ${LEFT_X} 360 C ${LEFT_X} 420, ${CENTER_X} 420, ${CENTER_X} 480`}
+              stroke={isUnlocked(4) ? "#006d37" : "#bbcbbb"} 
+              strokeWidth={isUnlocked(4) ? "6" : "4"} 
+              strokeDasharray={isUnlocked(4) ? "" : "8 8"} 
+              fill="none"
             />
           </Svg>
 
-          {/* Node 1: Completed */}
+          {/* Node 1 */}
           <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 0 }]}>
             <Pressable 
-              style={({ pressed }) => [styles.nodeCompleted, pressed && styles.nodePressed]} 
+              style={({ pressed }) => [
+                isCompleted('ch1') ? styles.nodeCompleted : styles.nodeUnlocked, 
+                pressed && styles.nodePressed
+              ]} 
               onPress={() => router.push('/quiz/ch1')}
             >
-              <MaterialIcons name="check-circle" size={48} color="#ffffff" />
+              {isCompleted('ch1') ? (
+                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
+              )}
             </Pressable>
-            <View style={styles.nodeLabelCompleted}>
-              <Text style={styles.nodeLabelTextCompleted}>Ch 1: Fundamentals</Text>
+            <View style={isCompleted('ch1') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
+              <Text style={isCompleted('ch1') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 1: Fundamentals</Text>
             </View>
           </View>
 
-          {/* Node 2: Locked */}
+          {/* Node 2 */}
           <View style={[styles.nodeContainer, { left: RIGHT_X - NODE_SIZE/2, top: 120 }]}>
-            <View style={styles.nodeLocked}>
-              <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-            </View>
-            <View style={styles.nodeLabelLocked}>
-              <Text style={styles.nodeLabelTextLocked}>Ch 2: Operating System</Text>
-            </View>
-          </View>
-
-          {/* Node 3: Locked */}
-          <View style={[styles.nodeContainer, { left: LEFT_X - NODE_SIZE/2, top: 240 }]}>
-            <View style={styles.nodeLocked}>
-              <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-            </View>
-            <View style={styles.nodeLabelLocked}>
-              <Text style={styles.nodeLabelTextLocked}>Ch 3: Office Automation</Text>
-            </View>
-          </View>
-
-          {/* Node 4: Locked */}
-          <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 360 }]}>
-            <View style={styles.nodeLocked}>
-              <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-            </View>
-            <View style={styles.nodeLabelLocked}>
-              <Text style={styles.nodeLabelTextLocked}>Ch 4: Data Communication</Text>
+            <Pressable 
+              style={({ pressed }) => [
+                !isUnlocked(1) ? styles.nodeLocked : isCompleted('ch2') ? styles.nodeCompleted : styles.nodeUnlocked,
+                isUnlocked(1) && pressed && styles.nodePressed
+              ]}
+              onPress={() => isUnlocked(1) && router.push('/quiz/ch2')}
+            >
+              {!isUnlocked(1) ? (
+                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
+              ) : isCompleted('ch2') ? (
+                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
+              )}
+            </Pressable>
+            <View style={!isUnlocked(1) ? styles.nodeLabelLocked : isCompleted('ch2') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
+              <Text style={!isUnlocked(1) ? styles.nodeLabelTextLocked : isCompleted('ch2') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 2: Operating System</Text>
             </View>
           </View>
 
-          {/* Node 5: Locked */}
-          <View style={[styles.nodeContainer, { left: RIGHT_X - NODE_SIZE/2, top: 480 }]}>
-            <View style={styles.nodeLocked}>
-              <MaterialIcons name="lock" size={40} color="#bbcbbb" />
+          {/* Node 3 */}
+          <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 240 }]}>
+            <Pressable 
+              style={({ pressed }) => [
+                !isUnlocked(2) ? styles.nodeLocked : isCompleted('ch3') ? styles.nodeCompleted : styles.nodeUnlocked,
+                isUnlocked(2) && pressed && styles.nodePressed
+              ]}
+              onPress={() => isUnlocked(2) && router.push('/quiz/ch3')}
+            >
+              {!isUnlocked(2) ? (
+                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
+              ) : isCompleted('ch3') ? (
+                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
+              )}
+            </Pressable>
+            <View style={!isUnlocked(2) ? styles.nodeLabelLocked : isCompleted('ch3') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
+              <Text style={!isUnlocked(2) ? styles.nodeLabelTextLocked : isCompleted('ch3') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 3: Office Automation</Text>
             </View>
-            <View style={styles.nodeLabelLocked}>
-              <Text style={styles.nodeLabelTextLocked}>Ch 5: Computer Networks</Text>
+          </View>
+
+          {/* Node 4 */}
+          <View style={[styles.nodeContainer, { left: LEFT_X - NODE_SIZE/2, top: 360 }]}>
+            <Pressable 
+              style={({ pressed }) => [
+                !isUnlocked(3) ? styles.nodeLocked : isCompleted('ch4') ? styles.nodeCompleted : styles.nodeUnlocked,
+                isUnlocked(3) && pressed && styles.nodePressed
+              ]}
+              onPress={() => isUnlocked(3) && router.push('/quiz/ch4')}
+            >
+              {!isUnlocked(3) ? (
+                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
+              ) : isCompleted('ch4') ? (
+                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
+              )}
+            </Pressable>
+            <View style={!isUnlocked(3) ? styles.nodeLabelLocked : isCompleted('ch4') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
+              <Text style={!isUnlocked(3) ? styles.nodeLabelTextLocked : isCompleted('ch4') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 4: Data Communication</Text>
+            </View>
+          </View>
+
+          {/* Node 5 */}
+          <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 480 }]}>
+            <Pressable 
+              style={({ pressed }) => [
+                !isUnlocked(4) ? styles.nodeLocked : isCompleted('ch5') ? styles.nodeCompleted : styles.nodeUnlocked,
+                isUnlocked(4) && pressed && styles.nodePressed
+              ]}
+              onPress={() => isUnlocked(4) && router.push('/quiz/ch5')}
+            >
+              {!isUnlocked(4) ? (
+                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
+              ) : isCompleted('ch5') ? (
+                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
+              )}
+            </Pressable>
+            <View style={!isUnlocked(4) ? styles.nodeLabelLocked : isCompleted('ch5') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
+              <Text style={!isUnlocked(4) ? styles.nodeLabelTextLocked : isCompleted('ch5') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 5: Computer Networks</Text>
             </View>
           </View>
         </View>
@@ -128,7 +240,7 @@ export default function MasteryMap() {
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Leaderboard</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/profile')}>
           <MaterialIcons name="person" size={28} color="#bbcbbb" />
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Profile</Text>
         </TouchableOpacity>
@@ -209,7 +321,10 @@ const styles = StyleSheet.create({
     marginTop: 8, // Absorb the 8px bottom border difference
   },
   nodeLabelCompleted: {
-    marginTop: 12,
+    position: 'absolute',
+    top: NODE_SIZE + 12,
+    alignSelf: 'center',
+    width: 180,
     backgroundColor: '#ffffff',
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -221,6 +336,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
     color: '#091d2e',
+    textAlign: 'center',
+  },
+  nodeUnlocked: {
+    width: NODE_SIZE,
+    height: NODE_SIZE,
+    borderRadius: NODE_SIZE/2,
+    backgroundColor: '#3B82F6', // Blue to indicate playable
+    borderWidth: 4,
+    borderColor: '#1D4ED8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 8,
+  },
+  nodeLabelUnlocked: {
+    position: 'absolute',
+    top: NODE_SIZE + 12,
+    alignSelf: 'center',
+    width: 180,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+  },
+  nodeLabelTextUnlocked: {
+    fontWeight: 'bold',
+    fontSize: 14,
+    color: '#1D4ED8',
+    textAlign: 'center',
   },
   nodeLocked: {
     width: NODE_SIZE,
@@ -237,8 +382,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: NODE_SIZE + 12,
     alignSelf: 'center',
-    width: 160,
-    alignItems: 'center',
+    width: 180,
     backgroundColor: '#d9eaff',
     paddingHorizontal: 16,
     paddingVertical: 8,

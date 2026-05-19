@@ -2,9 +2,13 @@
 
 # dependencies
 node_modules/
-/backend/venv
+/backend/venv/
+/backend/.venv/
+/.venv/
 /backend/.env
+/.env
 /backend/__pycache__/
+/backend/vector_index/
 # Expo
 .expo/
 dist/
@@ -43,3 +47,17 @@ firestore_schema_plan.md
 # generated native folders
 /ios
 /android
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Firebase credentials
+*firebase-adminsdk.json
+/backend/firebase-adminsdk.json
