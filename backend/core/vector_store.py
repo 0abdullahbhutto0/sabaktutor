@@ -2,7 +2,6 @@
 Vector Store Module
 ===================
 Handles embedding storage and retrieval using FAISS.
-Falls back to computing embeddings if not found in store.
 """
 
 import os
@@ -23,11 +22,7 @@ class VectorRecord:
 
 
 class FaissVectorStore:
-    """
-    FAISS-based vector store for embeddings.
-    Persists to disk, loads on startup.
-    Auto-computes missing embeddings on demand.
-    """
+    """FAISS-based vector store for embeddings. Persists to disk."""
 
     def __init__(
         self,
@@ -53,18 +48,16 @@ class FaissVectorStore:
         )
 
     def _load(self) -> bool:
-        """Load existing index from disk. Returns True if loaded."""
+        """Load existing index from disk."""
         faiss_path, records_path, meta_path = self._get_paths()
         
         if not os.path.exists(faiss_path):
-            print(f"📂 No existing index at {self.index_path}, starting fresh")
+            print(f"No existing index at {self.index_path}, starting fresh")
             return False
 
         try:
             import faiss
-
-            loaded_index = faiss.read_index(faiss_path)
-            self._faiss_index = loaded_index
+            self._faiss_index = faiss.read_index(faiss_path)
             
             with open(records_path, "rb") as f:
                 self._records = pickle.load(f)
@@ -75,11 +68,11 @@ class FaissVectorStore:
                 self._id_to_index[record_id] = i
                 self._index_to_id[i] = record_id
             
-            print(f"✅ Loaded {len(self._records)} vectors from {self.index_path}")
+            print(f"Loaded {len(self._records)} vectors from {self.index_path}")
             return True
             
         except Exception as e:
-            print(f"⚠️ Failed to load index: {e}")
+            print(f"Failed to load index: {e}")
             self._records.clear()
             self._id_to_index.clear()
             self._index_to_id.clear()
@@ -93,7 +86,7 @@ class FaissVectorStore:
     def save(self) -> None:
         """Persist index to disk."""
         if self._faiss_index.ntotal == 0:
-            print("⚠️ Nothing to save, index is empty")
+            print("Nothing to save, index is empty")
             return
             
         faiss_path, records_path, meta_path = self._get_paths()
@@ -125,11 +118,9 @@ class FaissVectorStore:
         import faiss
         faiss.normalize_L2(vector)
         
-     
         self._faiss_index.add(vector)
         index_pos = self._faiss_index.ntotal - 1
         
-       
         self._records[record_id] = VectorRecord(
             id=record_id,
             vector=vector[0],
@@ -140,7 +131,7 @@ class FaissVectorStore:
         self._index_to_id[index_pos] = record_id
 
     def get(self, record_id: str) -> Optional[np.ndarray]:
-        """Get vector by ID. Returns None if not found."""
+        """Get vector by ID."""
         record = self._records.get(record_id)
         return record.vector if record else None
 
@@ -152,7 +143,6 @@ class FaissVectorStore:
     def exists(self, record_id: str) -> bool:
         """Check if vector exists."""
         return record_id in self._records
-
 
     def search(self, query_vector: np.ndarray, top_k: int = 10) -> List[Tuple[str, float, str]]:
         """
@@ -178,41 +168,6 @@ class FaissVectorStore:
                 results.append((record_id, float(score), record.content))
         
         return results
-
-    def search_by_text(
-        self,
-        text: str,
-        embedding_manager,
-        top_k: int = 10,
-    ) -> List[Tuple[str, float, str]]:
-        """
-        Convenience: encode text then search.
-        Auto-computes embedding if not cached.
-        """
-        query_vector = embedding_manager.encode_query(text)
-        return self.search(query_vector, top_k)
-
-    def get_or_compute(
-        self,
-        record_id: str,
-        text: str,
-        embedding_manager,
-    ) -> np.ndarray:
-        """
-        Get vector from store, or compute and store if missing.
-        This is the KEY method — eliminates recompute penalty.
-        """
-        existing = self.get(record_id)
-        if existing is not None:
-            return existing
-        
-        vector = embedding_manager.encode(text)
-        self.add(record_id, vector, content=text)
-        return vector
-
-    def get_all_ids(self) -> List[str]:
-        """Get all stored IDs."""
-        return list(self._records.keys())
 
     def count(self) -> int:
         """Get total vectors stored."""

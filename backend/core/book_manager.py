@@ -6,13 +6,13 @@ No metadata persistence needed.
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+import uuid
 from core.tree import DocumentTree, TreeNode, Chunk, NodeType
 from core.hybrid_search import HybridSearchEngine
-import uuid
+from core.embeddings import EmbeddingManager
 
 
 @dataclass
@@ -37,22 +37,19 @@ class BookMetadata:
 
 
 class BookManager:
-    """
-    Manages books loaded directly from JSON files.
-    """
+    """Manages books loaded directly from JSON files."""
 
     def __init__(
         self,
-        local_cache_dir: str = "./book_cache",
         vector_index_dir: str = "./vector_index",
+        embedding_manager: Optional[EmbeddingManager] = None,
     ):
-        self.local_cache_dir = Path(local_cache_dir)
         self.vector_index_dir = Path(vector_index_dir)
-        self.local_cache_dir.mkdir(parents=True, exist_ok=True)
         self.vector_index_dir.mkdir(parents=True, exist_ok=True)
+        self.embedding_manager = embedding_manager
 
         self._active_books: Dict[str, Any] = {}
-        self._metadata_cache: Dict[str, BookMetadata] = {}
+        self._registry: Dict[str, BookMetadata] = {}
 
     def register_book(
         self,
@@ -70,7 +67,7 @@ class BookManager:
             grade=grade,
             file_path=file_path,
         )
-        self._metadata_cache[book_id] = metadata
+        self._registry[book_id] = metadata
         return metadata
 
     def load_book(self, book_id: str, force_reload: bool = False) -> Dict[str, Any]:
@@ -78,7 +75,7 @@ class BookManager:
         if not force_reload and book_id in self._active_books:
             return self._active_books[book_id]
 
-        metadata = self._get_metadata(book_id)
+        metadata = self._registry.get(book_id)
         if metadata and Path(metadata.file_path).exists():
             book_data = self._load_from_file(metadata)
             self._active_books[book_id] = book_data
@@ -88,7 +85,7 @@ class BookManager:
 
     def get_book(self, book_id: str) -> Optional[BookMetadata]:
         """Get book metadata."""
-        return self._metadata_cache.get(book_id)
+        return self._registry.get(book_id)
 
     def list_books(
         self,
@@ -96,7 +93,7 @@ class BookManager:
         grade: Optional[str] = None,
     ) -> List[BookMetadata]:
         """List all registered books."""
-        books = list(self._metadata_cache.values())
+        books = list(self._registry.values())
 
         if subject:
             books = [b for b in books if b.subject == subject]
@@ -109,13 +106,9 @@ class BookManager:
         """Delete a book from memory."""
         if book_id in self._active_books:
             del self._active_books[book_id]
-        if book_id in self._metadata_cache:
-            del self._metadata_cache[book_id]
+        if book_id in self._registry:
+            del self._registry[book_id]
         return True
-
-    def _get_metadata(self, book_id: str) -> Optional[BookMetadata]:
-        """Get metadata from cache."""
-        return self._metadata_cache.get(book_id)
 
     def _load_from_file(self, metadata: BookMetadata) -> Dict[str, Any]:
         """Load book from JSON file."""
@@ -170,6 +163,7 @@ class BookManager:
         engine = HybridSearchEngine(
             vector_store_path=vector_path,
             book_id=metadata.book_id,
+            embedding_manager=self.embedding_manager,
         )
 
         engine.index_tree(tree)

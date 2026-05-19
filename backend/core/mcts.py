@@ -19,7 +19,6 @@ class NodeState(str, Enum):
     """State of an MCTS node."""
     UNVISITED = "unvisited"
     EXPANDED = "expanded"
-    TERMINAL = "terminal"
 
 
 @dataclass
@@ -108,7 +107,6 @@ class MonteCarloTreeSearch:
         self._doc_to_mcts: Dict[str, str] = {}
 
         self.total_iterations = 0
-        self._best_node_id: Optional[str] = None
         self._best_score: float = 0.0
 
         self._query_embedding: Optional[np.ndarray] = None
@@ -206,7 +204,6 @@ class MonteCarloTreeSearch:
 
         start_time = time.time()
         self.total_iterations = 0
-        self._best_node_id = None
         self._best_score = 0.0
 
         self._cached_query = query
@@ -336,7 +333,6 @@ class MonteCarloTreeSearch:
         if root.visit_count < self.min_visits:
             return
 
-        best = None
         best_value = -float('inf')
 
         for node in self.nodes.values():
@@ -344,10 +340,8 @@ class MonteCarloTreeSearch:
                 value = node.mean_value
                 if value > best_value:
                     best_value = value
-                    best = node
 
-        if best:
-            self._best_node_id = best.id
+        if best_value > self._best_score:
             self._best_score = best_value
 
     def _extract_results(self, query: str, max_results: int) -> List[SearchResult]:
@@ -419,7 +413,6 @@ class MonteCarloTreeSearch:
         self._doc_to_mcts.clear()
         self.root_id = None
         self.document_tree = None
-        self._best_node_id = None
         self._best_score = 0.0
         self.total_iterations = 0
         self._query_embedding = None

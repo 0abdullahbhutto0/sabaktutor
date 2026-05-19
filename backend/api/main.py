@@ -6,42 +6,30 @@ Every request includes book_id — loaded on-demand per request.
 API:
 - Querying books via LLM (streaming SSE)
 - Quiz generation (chapter, unit, full book) - streaming SSE
-- Quiz submission and grading
 """
 
-import os
-from typing import AsyncGenerator, List, Dict
+from typing import AsyncGenerator, List
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 
 from api.schemas import (
     AskRequest,
     QuizGenerateRequest,
-    QuizSubmitRequest,
-    QuizSubmitResponse,
+    QuizBackgroundGenerateRequest,
 )
 from api.dependencies import get_services, Services
 from api.streaming import sse_stream
-from api.prompts import Prompts
+from core.firebase import save_quiz_to_firestore
+import asyncio
 
-# ─── Environment ───
-OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-
-BOOK_CACHE_DIR = "./book_cache"
-VECTOR_INDEX_DIR = "./vector_index"
 DATA_DIR = "."
 
-DEFAULT_SUBJECT = "Computer Science"
-DEFAULT_GRADE = "9"
 
-
-def _discover_books() -> List[Dict[str, str]]:
+def _discover_books() -> List[dict]:
     """Auto-discover JSON book files in project directory."""
     books = []
     data_dir = Path(DATA_DIR)
@@ -52,8 +40,6 @@ def _discover_books() -> List[Dict[str, str]]:
         books.append({
             "book_id": book_id,
             "title": book_id.replace("_", " ").title(),
-            "subject": DEFAULT_SUBJECT,
-            "grade": DEFAULT_GRADE,
             "file_path": str(f),
         })
     return books
@@ -69,14 +55,14 @@ async def lifespan(app: FastAPI):
             services.book_manager.register_book(
                 book_id=book["book_id"],
                 title=book["title"],
-                subject=book["subject"],
-                grade=book["grade"],
+                subject="Computer Science",
+                grade="9",
                 file_path=book["file_path"],
             )
         except Exception as e:
-            print(f"⚠️ Failed to register book {book['book_id']}: {e}")
+            print(f"Warning: Failed to register book {book['book_id']}: {e}")
     yield
-    services.close()
+    await services.close()
 
 
 app = FastAPI(
@@ -124,7 +110,7 @@ async def ask_stream(req: AskRequest, services: Services = Depends(get_services)
         raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
 
     async def token_generator() -> AsyncGenerator[str, None]:
-        for token in services.ask_stream(req.query, max_results=3):
+        async for token in services.ask_stream(req.query, max_results=3):
             yield sse_stream("token", {"token": token})
         yield sse_stream("done", {"status": "complete"})
 
@@ -154,88 +140,34 @@ async def generate_quiz_stream(
         raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
 
     async def quiz_generator() -> AsyncGenerator[str, None]:
-        yield sse_stream("status", {"message": "Starting quiz generation...", "step": 1, "total": 3})
-        yield sse_stream("status", {"message": "Collecting content...", "step": 2, "total": 3})
+        yield sse_stream("status", {"message": "Starting quiz generation...", "step": 1})
 
-        if req.quiz_type == "chapter":
-            nodes = services._get_chapter_nodes(req.chapter_id)
-        elif req.quiz_type == "unit":
-            nodes = []
-            for ch in req.unit_chapters or []:
-                nodes.extend(services._get_chapter_nodes(ch["id"]))
-        else:  
-            nodes = [n for n in services._active_tree.get_all_nodes() if not n.is_root and n.chunks]
-
-        yield sse_stream("status", {"message": f"Generating {req.target_count} questions via LLM...", "step": 3, "total": 3})
-
-        all_chunks = []
-        for node in nodes:
-            for chunk in node.chunks:
-                if chunk.content.strip():
-                    all_chunks.append({
-                        "chunk_id": chunk.id,
-                        "content": chunk.content,
-                        "node_title": node.title or "",
-                    })
-
-        if not all_chunks:
-            yield sse_stream("error", {"message": "No content found for quiz generation"})
-            return
-
-        max_chunks = min(len(all_chunks), max(req.target_count // 2, 5))
-        step = max(1, len(all_chunks) // max_chunks) if len(all_chunks) > max_chunks else 1
-        selected_chunks = [all_chunks[i] for i in range(0, len(all_chunks), step)][:max_chunks]
-
-        chunks_text = ""
-        for i, chunk in enumerate(selected_chunks, 1):
-            chunks_text += f"""
---- CHUNK {i} ---"""
-            chunks_text += f"Title: {chunk['node_title']}"
-            chunks_text += f"Content: {chunk['content']}"
-
-        prompt = services.prompts.quiz_batch(
-            chunks_text=chunks_text,
-            total_questions=req.target_count,
-            subject=req.subject or DEFAULT_SUBJECT,
-            grade=req.grade or DEFAULT_GRADE,
-        )
-
-        full_response = []
-        for token in services.llm.stream_complete(
-            prompt,
-            system=services.prompts.quiz_system(req.subject or DEFAULT_SUBJECT, req.grade or DEFAULT_GRADE),
-            max_tokens=12000,
-        ):
-            full_response.append(token)
-            yield sse_stream("token", {"token": token})
-
-        response_text = "".join(full_response)
-        questions = services.quiz_generator._parse_batch_response(response_text, selected_chunks)
-        questions = questions[:req.target_count]
-        questions = services.quiz_generator._balance_difficulty(questions)
-        questions = services.quiz_generator._balance_correct_index(questions)
-
-        from quiz.quiz_generator import Quiz
-        quiz = Quiz(
+        async for event in services.quiz_generator.generate_quiz_streaming(
+            document_tree=services._active_tree,
+            subject=req.subject or "Computer Science",
+            grade=req.grade or "9",
             quiz_type=req.quiz_type,
-            subject=req.subject or DEFAULT_SUBJECT,
-            grade=req.grade or DEFAULT_GRADE,
-            title=req.title or f"{req.quiz_type.title()} Quiz",
-            chapter_ids=[req.chapter_id] if req.quiz_type == "chapter" else [c["id"] for c in (req.unit_chapters or [])],
-            chapter_names=[req.chapter_id] if req.quiz_type == "chapter" else [c["name"] for c in (req.unit_chapters or [])],
-            questions=questions,
+            chapter_id=req.chapter_id,
+            unit_chapters=[{"id": c.id, "name": c.name} for c in (req.unit_chapters or [])],
+            target_count=req.target_count,
             duration_minutes=req.duration_minutes,
             passing_percent=req.passing_percent,
-            book_id=services._active_book_id or "",
-        )
-
-        yield sse_stream("done", {
-            "quiz": quiz.to_dict(),
-            "title": quiz.title,
-            "question_count": len(quiz.questions),
-            "duration_minutes": quiz.duration_minutes,
-            "passing_percent": quiz.passing_percent,
-        })
+            book_id=req.book_id,
+            title=req.title,
+        ):
+            if event["type"] == "token":
+                yield sse_stream("token", {"token": event["token"]})
+            elif event["type"] == "error":
+                yield sse_stream("error", {"message": event["message"]})
+            elif event["type"] == "done":
+                quiz = event["quiz"]
+                yield sse_stream("done", {
+                    "quiz": quiz.to_dict(),
+                    "title": quiz.title,
+                    "question_count": len(quiz.questions),
+                    "duration_minutes": quiz.duration_minutes,
+                    "passing_percent": quiz.passing_percent,
+                })
 
     return StreamingResponse(
         quiz_generator(),
@@ -247,56 +179,52 @@ async def generate_quiz_stream(
         },
     )
 
+async def background_quiz_generator(req: QuizBackgroundGenerateRequest, services: Services):
+    import sys
+    print(f"--- STARTING BACKGROUND GEN FOR {req.level_id} ---", flush=True)
+    try:
+        services.load_book(req.book_id)
+        print(f"--- BOOK LOADED FOR {req.level_id} ---", flush=True)
+        async for event in services.quiz_generator.generate_quiz_streaming(
+            document_tree=services._active_tree,
+            subject=req.subject or "Computer Science",
+            grade=req.grade or "9",
+            quiz_type=req.quiz_type,
+            chapter_id=req.chapter_id,
+            unit_chapters=[{"id": c.id, "name": c.name} for c in (req.unit_chapters or [])],
+            target_count=req.target_count,
+            duration_minutes=req.duration_minutes,
+            passing_percent=req.passing_percent,
+            book_id=req.book_id,
+            title=req.title,
+        ):
+            print(f"--- EVENT {event['type']} for {req.level_id} ---", flush=True)
+            if event["type"] == "done":
+                quiz = event["quiz"]
+                quiz_data = quiz.to_dict()
+                quiz_id = f"quiz_{req.user_id}_{req.level_id}"
+                await asyncio.to_thread(save_quiz_to_firestore, quiz_id, quiz_data, req.user_id)
+                print(f"Background quiz generation for {quiz_id} complete.", flush=True)
+    except Exception as e:
+        print(f"Background quiz generation failed: {e}", flush=True)
 
-@app.post("/quiz/grade", response_model=QuizSubmitResponse)
-async def grade_quiz(
-    req: QuizSubmitRequest, 
+@app.post("/quiz/generate/background")
+async def generate_quiz_background(
+    req: QuizBackgroundGenerateRequest,
+    background_tasks: BackgroundTasks,
     services: Services = Depends(get_services),
 ):
     """
-    Grade quiz answers and get feedback.
-    Client sends full quiz object + responses.
+    Generate a quiz in the background and save to Firestore.
+    Returns 202 Accepted immediately.
     """
-    from quiz.quiz_generator import Quiz, MCQQuestion, MCQOption
-
-    quiz_data = req.quiz
-    questions = []
-    for q_data in quiz_data.get("questions", []):
-        options = [MCQOption(text=o["text"], is_correct=o.get("is_correct", False)) 
-                   for o in q_data.get("options", [])]
-        questions.append(MCQQuestion(
-            id=q_data.get("id", ""),
-            stem=q_data.get("stem", ""),
-            options=options,
-            difficulty=q_data.get("difficulty", "medium"),
-            topic=q_data.get("topic", "general"),
-            marks=q_data.get("marks", 1),
-        ))
-
-    quiz = Quiz(
-        id=quiz_data.get("id", "temp"),
-        quiz_type=quiz_data.get("quiz_type", "chapter"),
-        subject=quiz_data.get("subject", ""),
-        grade=quiz_data.get("grade", ""),
-        title=quiz_data.get("title", ""),
-        questions=questions,
-        duration_minutes=quiz_data.get("duration_minutes", 20),
-        passing_percent=quiz_data.get("passing_percent", 60),
-    )
-
-    feedback = services.quiz_engine.grade_attempt_in_memory(quiz, req.responses, req.user_id)
-
-    return QuizSubmitResponse(
-        score_percent=feedback.score_percent,
-        passed=feedback.passed,
-        summary=feedback.summary,
-        preparation=feedback.preparation,
-    )
+    background_tasks.add_task(background_quiz_generator, req, services)
+    return {"status": "accepted", "message": "Quiz generation started in background"}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0", "streaming_only": True}
+    return {"status": "ok", "version": "2.0.0", "streaming": True}
 
 
 if __name__ == "__main__":
