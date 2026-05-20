@@ -15,7 +15,7 @@ The core feature of SabakTutor is its **Dynamic RAG (Retrieval-Augmented Generat
 ### 1. The RAG Engine (Backend)
 - **Document Ingestion:** The curriculum (e.g., Computer Science Grade 9) is loaded from structured JSON files (`cs_9.json`).
 - **Vector Indexing:** The text is chunked and embedded using local FAISS hybrid search, allowing the system to retrieve the most relevant sections of a chapter.
-- **LLM Streaming:** The selected chunks are passed via prompt to an LLM (powered by OpenRouter, currently utilizing `google/gemini-2.0-flash-001`). The backend (`QuizGenerator`) enforces a strict structure (25% easy, 50% medium, 25% hard) and dynamically streams the response.
+- **LLM Streaming:** The selected chunks are passed via prompt to an LLM (powered by OpenRouter, currently utilizing `openrouter/owl-alpha`). The backend (`QuizGenerator`) enforces a strict structure (25% easy, 50% medium, 25% hard) and dynamically streams the response.
 - **Firestore Integration:** The parsed quizzes are automatically serialized and pushed directly to Firebase Firestore under the user's specific composite ID.
 
 ### 2. The Frontend (React Native)
@@ -55,7 +55,7 @@ pip install -r requirements.txt
 Create a `.env` file in the **root** of the project (outside the backend folder) with the following variables:
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_MODEL=google/gemini-2.0-flash-001
+OPENROUTER_MODEL=openrouter/owl-alpha
 EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
@@ -66,7 +66,7 @@ Run the backend server:
 ```bash
 python -m api.main
 ```
-The server will run on `http://0.0.0.0:8000`.
+The server will run on `http://localhost:8000`.
 
 ### 2. Frontend Setup (React Native / Expo)
 
