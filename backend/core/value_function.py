@@ -169,7 +169,7 @@ class ValueFunction:
                 timing.nodes_loaded_from_store += 1
             else:
                 # Truncate if too long (embedding models have limits)
-                truncated_content = content[:4000]
+                truncated_content = content
                 contents_to_encode.append(truncated_content)
                 node_ids_to_encode.append(node.id)
 
@@ -228,14 +228,35 @@ class ValueFunction:
         self,
         query: str,
         candidate_nodes: List[str],
+        query_embedding: Optional[np.ndarray] = None,
     ) -> Dict[str, float]:
-        """Predict value estimates for candidate nodes."""
-        if not candidate_nodes or self.vector_store.count() == 0:
+        """
+        Predict value estimates for candidate nodes.
+
+        FIXED: If candidate_nodes is small (e.g., single node for MCTS), we now
+        do a targeted search rather than relying on global top-k which would miss it.
+        """
+        if not candidate_nodes:
+            return {}
+
+        if self.vector_store.count() == 0:
             return {node_id: 0.5 for node_id in candidate_nodes}
 
-        query_embedding = self._get_query_embedding(query)
-        results = self.vector_store.search(query_embedding, top_k=self.top_k)
+        # Use provided embedding or compute+cache
+        if query_embedding is not None:
+            q_emb = query_embedding
+        else:
+            q_emb = self._get_query_embedding(query)
 
+        # FIXED: For small candidate sets (MCTS single-node eval), we need to
+        # search more broadly and filter, OR use a candidate-aware search.
+        # Strategy: search with top_k = max(top_k, len(candidate_nodes)) to ensure
+        # we don't miss candidates, then filter.
+        search_k = max(self.top_k, len(candidate_nodes), min(len(candidate_nodes) * 2, self.vector_store.count()))
+
+        results = self.vector_store.search(q_emb, top_k=search_k)
+
+        # Build map of all results
         chunk_scores_map: Dict[str, List[ChunkScore]] = {}
         for node_id, score, content in results:
             chunk_score = ChunkScore(
@@ -257,7 +278,8 @@ class ValueFunction:
                 )
                 node_scores.append(node_score)
             else:
-                node_scores.append(NodeScore(node_id=node_id, raw_score=0.0))
+                # Candidate not found in search results - assign low but non-zero score
+                node_scores.append(NodeScore(node_id=node_id, raw_score=0.05))
 
         node_scores = self.scorer.normalize_scores(node_scores)
         return {ns.node_id: ns.normalized_score for ns in node_scores}

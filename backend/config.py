@@ -39,7 +39,7 @@ class EmbeddingConfig:
 class MCTSConfig:
     """Configuration for Monte Carlo Tree Search."""
 
-    max_iterations: int = 75
+    max_iterations: int = 1000
     max_depth: int = 50
     exploration_constant: float = 1.414
     min_visits: int = 5
