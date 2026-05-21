@@ -74,7 +74,7 @@ class HybridSearchEngine:
 
         self.value_function = ValueFunction(
             embedding_manager=self.embedding_manager,
-            top_k=self.config.top_k_chunks,
+            top_k=self.config.top_k_nodes, 
             use_sqrt_normalization=self.config.use_square_root_normalization,
             vector_store_path=vector_store_path,
         )
@@ -109,9 +109,9 @@ class HybridSearchEngine:
 
             return {
                 "total_nodes": tree.get_node_count(),
-                "total_chunks": timing.chunks_created + timing.chunks_loaded_from_store,
-                "new_embeddings": timing.chunks_embedded,
-                "loaded_from_store": timing.chunks_loaded_from_store,
+                "total_indexed": timing.nodes_processed,
+                "new_embeddings": timing.nodes_embedded,
+                "loaded_from_store": timing.nodes_loaded_from_store,
                 "indexing_time_ms": timing.total_time_ms,
             }
 
@@ -211,7 +211,7 @@ class HybridSearchEngine:
 
         nodes_to_evaluate = [
             node.id for node in self.tree.get_all_nodes()
-            if not node.is_root and (node.chunks or len(node.content) > 50)
+            if not node.is_root and len(node.content) > 50
         ]
 
         value_estimates = self.value_function.predict_values(query, nodes_to_evaluate)
@@ -226,7 +226,6 @@ class HybridSearchEngine:
                     "content": node.content,
                     "depth": node.depth,
                     "title": node.title,
-                    "num_chunks": node.num_chunks,
                 })
                 self._visited_nodes.add(node_id)
 

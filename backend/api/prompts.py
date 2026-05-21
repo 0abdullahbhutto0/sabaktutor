@@ -4,93 +4,157 @@ Custom Prompts for LLM Interactions
 All prompts centralized for easy customization.
 """
 
-from typing import Optional
-
 
 class Prompts:
-    """Centralized prompt templates for the Sindh Board Quiz System."""
-
-    @staticmethod
-    def teacher_system(subject: str = "Computer Science", grade: str = "9") -> str:
-        """System prompt for teacher persona."""
-        return f"""You are an experienced {grade}th grade {subject} teacher for the Sindh Board (Pakistan) curriculum.
-You explain concepts clearly, use examples relevant to Pakistani students, and encourage critical thinking.
-Your answers should be accurate according to the Sindh Board textbook and appropriate for {grade}th grade students."""
-
+    """Prompt templates for LLM interactions."""
 
     @staticmethod
     def ask_stream(
-        context: str,
         query: str,
-        subject: str = "Computer Science",
-        grade: str = "9",
+        context: str,
+        book_title: str,
     ) -> str:
-        """Streaming prompt for asking questions."""
-        return f"""You are answering a student's question based on the Sindh Board {grade}th grade {subject} textbook.
+        """
+        Generate prompt for streaming Q&A about book content.
 
-TEXTBOOK CONTENT:
+        Args:
+            query: The user's question
+            context: Retrieved relevant content from the book tree
+            book_title: The book title
+        """
+        return f"""You are a helpful tutor for the Sindh Board curriculum. Answer the student's question based on the provided textbook content.
+
+Book: {book_title}
+
+RELEVANT CONTENT:
 {context}
 
-STUDENT QUESTION: {query}
+STUDENT QUESTION:
+{query}
 
 INSTRUCTIONS:
-- Answer clearly and concisely in language a {grade}th grade student can understand
-- If the question is NOT related to the provided textbook content, clearly state: "This concept is not covered in your textbook."
-- Use examples from Pakistani context where possible
-- Provide citations with relevant references from the content
-- Keep the answer focused and structured
+- Answer based ONLY on the provided textbook content
+- If the content doesn't contain the answer, say so clearly
+- Be concise but thorough
+- Use simple language suitable for the student's level
+- Include examples from the text when relevant
+- give citation at end include page number
 
-Your response:"""
+Answer:"""
+
+    @staticmethod
+    def teacher_system(book_title: str = "") -> str:
+        """System message for the tutor."""
+        return f"""You are an expert educational tutor for the Sindh Board curriculum.
+{('Book: ' + book_title) if book_title else ''}
+You help students understand concepts from their textbooks clearly and accurately.
+Always base your answers on the provided content."""
 
     @staticmethod
     def quiz_batch(
-        chunks_text: str,
+        content_text: str,
         total_questions: int,
-        subject: str = "Computer Science",
-        grade: str = "9",
+        book_title: str,
     ) -> str:
-        """Batch prompt for generating all quiz questions in one call."""
-        easy_count = max(1, total_questions // 4)
-        medium_count = total_questions // 2
-        hard_count = total_questions // 4
+        """
+        Generate prompt for batch MCQ quiz generation.
 
-        return f"""You are generating Sindh Board (Pakistan) {grade}th grade {subject} MCQs.
+        Args:
+            content_text: The textbook content to generate questions from
+            total_questions: Total number of questions to generate
+            book_title: The book title (e.g., "Physics Grade 9")
+        """
+        return f"""You are an expert educational content creator for the Sindh Board curriculum.
 
-INSTRUCTIONS:
-Generate exactly {total_questions} multiple choice questions from ALL the content chunks below.
-Distribute questions evenly across ALL chunks provided.
+Generate {total_questions} high-quality multiple-choice questions (MCQs) based on the following textbook content.
 
-CONTENT CHUNKS:
-{chunks_text}
+Book: {book_title}
 
-RULES:
-- Each question must have exactly 4 options (A, B, C, D)
-- Only ONE option is correct
-- Options should be plausible distractors based on common student misconceptions
-- Include numerical/computational questions where content supports it
-- Questions should test understanding, not just memorization
-- The correct answer index MUST be fairly distributed across A(0), B(1), C(2), D(3) — do NOT make only B and C correct
-- Each question MUST reference which chunk it came from (use chunk number)
-- Use Pakistani context and examples where applicable
+CONTENT:
+{content_text}
 
-DIFFICULTY DISTRIBUTION:
-- {easy_count} easy: Direct fact recall, single-step computation
-- {medium_count} medium: Application, two-step reasoning  
-- {hard_count} hard: Analysis, multi-step, edge cases
+REQUIREMENTS:
+1. Generate exactly {total_questions} MCQs covering the key concepts in the content
+2. Each question should have:
+   - A clear, grammatically correct stem (question)
+   - 4 distinct options (A, B, C, D)
+   - Only ONE correct answer
+   - A difficulty level: "easy", "medium", or "hard"
+   - A topic label (e.g., "measurement", "kinematics", "forces")
+3. Mix of difficulties: ~25% easy, ~50% medium, ~25% hard
+4. Questions should test understanding, not just recall
+5. Do not include the correct answer in the stem
+6. Options should be plausible but clearly distinguishable
 
-OUTPUT FORMAT (strict JSON array):
+OUTPUT FORMAT:
+Return a JSON array with {total_questions} objects. Each object must have:
+- "stem": The question text
+- "options": Array of 4 option strings
+- "correct_index": 0-3 indicating the correct option
+- "difficulty": "easy", "medium", or "hard"
+- "topic": Brief topic label
+- "chunk_ref": Reference to which content section (1, 2, 3...) the question relates to
+
+Example:
 [
   {{
-    "stem": "Question text here?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "stem": "What is the SI unit of force?",
+    "options": ["Newton", "Joule", "Watt", "Pascal"],
     "correct_index": 0,
-    "difficulty": "medium",
-    "topic": "sub_topic_tag",
+    "difficulty": "easy",
+    "topic": "measurement",
     "chunk_ref": 1
-  }},
-  ...
+  }}
 ]
 
-Respond with ONLY the JSON array. No markdown, no explanations, no code blocks."""
+Generate the questions now:"""
 
-  
+    @staticmethod
+    def quiz_single(
+        content: str,
+        difficulty: str = "medium",
+        topic: str = "general",
+        book_title: str = "",
+    ) -> str:
+        """Generate prompt for a single MCQ."""
+        return f"""Generate one MCQ based on this content:
+
+Book: {book_title}
+
+Content:
+{content}
+
+Requirements:
+- Difficulty: {difficulty}
+- Topic: {topic}
+- Return as JSON with: stem, options (array of 4), correct_index (0-3), difficulty, topic
+
+JSON:"""
+
+    @staticmethod
+    def explain_answer(
+        question: str,
+        correct_answer: str,
+        options: list,
+        book_title: str = "",
+    ) -> str:
+        """Generate prompt for explaining why an answer is correct."""
+        return f"""Explain why the following answer is correct for this question:
+
+Book: {book_title}
+
+Question: {question}
+Correct Answer: {correct_answer}
+All Options: {options}
+
+Provide a brief, educational explanation (2-3 sentences) of why the correct answer is right.
+Keep the explanation concise and suitable for a student. Focus on the key concept being tested."""
+
+    @staticmethod
+    def generate_summary(content: str, max_sentences: int = 5) -> str:
+        """Generate a summary of content."""
+        return f"""Summarize the following content in exactly {max_sentences} sentences:
+
+{content}
+
+Keep the summary clear, accurate, and focused on key points."""

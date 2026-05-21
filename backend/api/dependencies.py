@@ -23,9 +23,6 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/llama-nemotron-embed-vl-1
 
 VECTOR_INDEX_DIR = os.getenv("VECTOR_INDEX_DIR", "./vector_index")
 
-DEFAULT_SUBJECT = os.getenv("DEFAULT_SUBJECT", "Computer Science")
-DEFAULT_GRADE = os.getenv("DEFAULT_GRADE", "9")
-
 
 class Services:
     """Lazy-initialized services - singleton per process."""
@@ -38,6 +35,7 @@ class Services:
         self._active_book_id = None
         self._active_engine = None
         self._active_tree = None
+        self._active_book_title = None
         self._prompts = Prompts()
 
     @property
@@ -88,6 +86,7 @@ class Services:
         self._active_book_id = book_id
         self._active_engine = book_data["engine"]
         self._active_tree = book_data["tree"]
+        self._active_book_title = book_data["metadata"].title
 
     def search(self, query: str, max_results: int = 5):
         if self._active_engine is None:
@@ -107,32 +106,31 @@ class Services:
             f"Source: {r.get('title', 'Untitled')}\n{r.get('content', '')}"
             for r in results
         )
+        book_title = self._active_book_title or ""
 
         prompt = self._prompts.ask_stream(
-            context=context,
             query=query,
-            subject=DEFAULT_SUBJECT,
-            grade=DEFAULT_GRADE,
+            context=context,
+            book_title=book_title,
         )
 
         if self.llm is None:
             yield "[LLM not configured]"
             return
 
-        system_msg = self._prompts.teacher_system(DEFAULT_SUBJECT, DEFAULT_GRADE)
+        system_msg = self._prompts.teacher_system(book_title)
         async for token in self.llm.stream_complete(prompt, system=system_msg):
             yield token
 
-    def generate_quiz(self, chapter_id: str, chapter_name: str):
+    def generate_quiz(self, chapter_id: str):
         if self._active_tree is None:
             raise RuntimeError("No book loaded.")
         return self.quiz_generator.generate_quiz(
             self._active_tree,
-            DEFAULT_SUBJECT,
-            DEFAULT_GRADE,
             "chapter",
             chapter_id=chapter_id,
             book_id=self._active_book_id or "",
+            book_title=self._active_book_title or "",
         )
 
     def _get_chapter_nodes(self, chapter_id: str):
@@ -140,7 +138,7 @@ class Services:
 
     async def close(self):
         if self._llm:
-            await self._llm.close()
+            await self.llm.close()
         if self._embedding_manager:
             self._embedding_manager.close()
 

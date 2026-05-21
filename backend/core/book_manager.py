@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import uuid
-from core.tree import DocumentTree, TreeNode, Chunk, NodeType
+from core.tree import DocumentTree, TreeNode, NodeType
 from core.hybrid_search import HybridSearchEngine
 from core.embeddings import EmbeddingManager
 
@@ -20,8 +20,6 @@ class BookMetadata:
     """Simple metadata for a stored book (in-memory only)."""
     book_id: str
     title: str
-    subject: str
-    grade: str
     file_path: str
     is_indexed: bool = False
 
@@ -29,8 +27,6 @@ class BookMetadata:
         return {
             "book_id": self.book_id,
             "title": self.title,
-            "subject": self.subject,
-            "grade": self.grade,
             "file_path": self.file_path,
             "is_indexed": self.is_indexed,
         }
@@ -55,16 +51,12 @@ class BookManager:
         self,
         book_id: str,
         title: str,
-        subject: str,
-        grade: str,
         file_path: str,
     ) -> BookMetadata:
         """Register a new book in memory."""
         metadata = BookMetadata(
             book_id=book_id,
             title=title,
-            subject=subject,
-            grade=grade,
             file_path=file_path,
         )
         self._registry[book_id] = metadata
@@ -87,20 +79,9 @@ class BookManager:
         """Get book metadata."""
         return self._registry.get(book_id)
 
-    def list_books(
-        self,
-        subject: Optional[str] = None,
-        grade: Optional[str] = None,
-    ) -> List[BookMetadata]:
+    def list_books(self) -> List[BookMetadata]:
         """List all registered books."""
-        books = list(self._registry.values())
-
-        if subject:
-            books = [b for b in books if b.subject == subject]
-        if grade:
-            books = [b for b in books if b.grade == grade]
-
-        return sorted(books, key=lambda b: (b.subject, b.grade, b.title))
+        return sorted(list(self._registry.values()), key=lambda b: b.title)
 
     def delete_book(self, book_id: str) -> bool:
         """Delete a book from memory."""
@@ -119,7 +100,7 @@ class BookManager:
 
         def infer_node_type(title: str) -> NodeType:
             t = (title or "").strip().upper()
-            if t in ("COMPUTER SCIENCE", "ROOT", "BOOK"):
+            if t in ("PHYSICS", "COMPUTER SCIENCE", "ROOT", "BOOK"):
                 return NodeType.ROOT
             if t[:2].replace(".", "").isdigit():
                 return NodeType.CHAPTER
@@ -145,10 +126,6 @@ class BookManager:
                     content=content,
                     title=title,
                 )
-
-                if content:
-                    node.add_chunk(Chunk(content=content))
-
                 tree.add_node(node, parent_id or tree.root_id)
 
                 if children:
@@ -158,6 +135,9 @@ class BookManager:
             process(data)
         else:
             process(data.get("nodes", [data]))
+
+        if isinstance(data, dict) and data.get("title"):
+            metadata.title = data["title"]
 
         vector_path = str(self.vector_index_dir / metadata.book_id)
         engine = HybridSearchEngine(
