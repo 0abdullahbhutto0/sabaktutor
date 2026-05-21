@@ -219,6 +219,24 @@ async def generate_quiz_background(
 async def health():
     return {"status": "ok", "version": "2.0.0", "streaming": True}
 
+@app.post("/debug/search")
+async def debug_search(req: AskRequest, services: Services = Depends(get_services)):
+    services.load_book(req.book_id)
+    results = services.search(req.query, max_results=10)
+    return {
+        "query": req.query,
+        "results": [
+            {
+                "node_id": r.get("node_id"),
+                "title": r.get("title"),
+                "score": r.get("score"),
+                "source": r.get("source"),
+                "content_preview": r.get("content", "")[:200],
+                "path": r.get("path"),
+            }
+            for r in results
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn

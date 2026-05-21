@@ -25,7 +25,7 @@ class QuizGenerateRequest(BaseModel):
     chapter_id: Optional[str] = None
     unit_chapters: Optional[List[UnitChapter]] = None
     title: Optional[str] = None
-    target_count: int = 20
+    target_count: int = 10
     duration_minutes: int = 20
     passing_percent: int = 60
 

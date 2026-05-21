@@ -4,7 +4,6 @@ Hybrid Search Engine Module
 
 from typing import List, Dict, Optional, Set, Any
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 import threading
 import time
@@ -74,7 +73,7 @@ class HybridSearchEngine:
 
         self.value_function = ValueFunction(
             embedding_manager=self.embedding_manager,
-            top_k=self.config.top_k_nodes, 
+            top_k=self.config.top_k_nodes,
             use_sqrt_normalization=self.config.use_square_root_normalization,
             vector_store_path=vector_store_path,
         )
@@ -126,6 +125,8 @@ class HybridSearchEngine:
         with self._lock:
             self._visited_nodes.clear()
 
+        # FIXED: Sequential execution instead of ThreadPoolExecutor
+        # Both are CPU-bound and hit same API - threads add overhead + race conditions
         results = self._search_hybrid(query, options)
         search_time = time.time() - start_time
 
@@ -147,76 +148,55 @@ class HybridSearchEngine:
         )
 
     def _search_hybrid(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
-        """Perform hybrid search combining value-based and MCTS-based approaches."""
-        results: Dict[str, Dict[str, Any]] = {}
-        visited: Set[str] = set()
+        """
+        Perform hybrid search combining value-based and MCTS-based approaches.
+        FIXED: Proper score normalization, no double-weighting, sequential execution.
+        """
+        # Phase 1: Value-based search (fast, broad recall)
+        value_results = self._search_value_only(query, options)
 
         if self.tree:
             self.mcts.initialize(self.tree, query=query)
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            value_future = executor.submit(self._search_value_only, query, options)
-            mcts_future = executor.submit(
-                self.mcts.search, query, options.max_results, options.early_stop
-            )
-
-            for result in value_future.result():
-                node_id = result["node_id"]
-                if node_id not in visited:
-                    results[node_id] = result
-                    visited.add(node_id)
-                    self._visited_nodes.add(node_id)
-
-            for result in mcts_future.result():
-                node_id = result.document_node_id
-                if node_id not in visited:
-                    results[node_id] = {
-                        "node_id": node_id,
-                        "score": result.score * options.value_weight,
-                        "source": "mcts",
-                        "visit_count": result.visit_count,
-                        "content": result.content,
-                        "depth": result.depth,
-                        "path": result.path,
-                    }
-                    visited.add(node_id)
-                    self._visited_nodes.add(node_id)
-
-        candidates = list(results.values())
-
-        path_prefixes = Counter(
-            "/".join(r.get("path", [])[:2]) if len(r.get("path", [])) >= 2 else r["node_id"]
-            for r in candidates
-        )
-
-        for candidate in candidates:
-            path = candidate.get("path", [])
-            prefix = "/".join(path[:2]) if len(path) >= 2 else candidate["node_id"]
-            candidate["diversity_score"] = 1.0 / path_prefixes[prefix]
-
-        for candidate in candidates:
-            candidate["combined_score"] = (
-                options.value_weight * candidate["score"] +
-                options.diversity_weight * candidate.get("diversity_score", 0.0)
-            )
-
-        candidates.sort(key=lambda x: x["combined_score"], reverse=True)
-        return candidates[:options.max_results]
+        self.mcts.max_iterations = options.max_iterations
+        self.mcts.early_stop_threshold = options.early_stop_threshold
+        mcts_results = self.mcts.search(query, options.max_results, options.early_stop)
+        return self._merge_results(value_results, mcts_results, query, options)
 
     def _search_value_only(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
-        """Perform value-based search only using embeddings."""
+        """
+        Perform value-based search only using embeddings.
+        FIXED: Only search nodes with actual content, use vector store directly.
+        """
         results = []
         if not self.tree:
             return results
 
+        # Get all valid leaf/content nodes
         nodes_to_evaluate = [
             node.id for node in self.tree.get_all_nodes()
             if not node.is_root and len(node.content) > 50
         ]
 
+        if not nodes_to_evaluate:
+            return results
+
+        # FIXED: Limit candidates to avoid passing thousands of IDs for nothing
+        # The vector store search is global anyway, so we just need enough for coverage
+        # If tree is huge, sample strategically (e.g., all chapter-level nodes)
+        if len(nodes_to_evaluate) > 500:
+            # Prioritize deeper nodes (more specific content)
+            nodes_to_evaluate = sorted(
+                nodes_to_evaluate,
+                key=lambda nid: self.tree.get_node(nid).depth if self.tree.get_node(nid) else 0,
+                reverse=True,
+            )[:500]
+
         value_estimates = self.value_function.predict_values(query, nodes_to_evaluate)
 
         for node_id, score in value_estimates.items():
+            if score <= 0.0:
+                continue
             node = self.tree.get_node(node_id)
             if node:
                 results.append({
@@ -226,8 +206,132 @@ class HybridSearchEngine:
                     "content": node.content,
                     "depth": node.depth,
                     "title": node.title,
+                    "path": node.path.split("/") if node.path else [node_id],
                 })
                 self._visited_nodes.add(node_id)
 
         results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:options.max_results]
+        return results[:options.max_results * 2]  # Get more for merging
+
+    def _merge_results(
+        self,
+        value_results: List[Dict[str, Any]],
+        mcts_results: List[SearchResult],
+        query: str,
+        options: SearchOptions,
+    ) -> List[Dict[str, Any]]:
+        """
+        Merge value and MCTS results with proper normalization.
+        FIXED: No double-weighting, both scores normalized to [0,1] first.
+        """
+        merged: Dict[str, Dict[str, Any]] = {}
+
+        # Normalize value scores to [0, 1]
+        if value_results:
+            max_val = max(r["score"] for r in value_results)
+            min_val = min(r["score"] for r in value_results)
+            val_range = max_val - min_val if max_val != min_val else 1.0
+            for r in value_results:
+                r["normalized_score"] = (r["score"] - min_val) / val_range
+        else:
+            max_val = min_val = val_range = 1.0
+
+        # Normalize MCTS scores to [0, 1]
+        if mcts_results:
+            max_mcts = max(r.score for r in mcts_results)
+            min_mcts = min(r.score for r in mcts_results)
+            mcts_range = max_mcts - min_mcts if max_mcts != min_mcts else 1.0
+            for r in mcts_results:
+                r._norm_score = (r.score - min_mcts) / mcts_range
+        else:
+            max_mcts = min_mcts = mcts_range = 1.0
+
+        # Add value results
+        for r in value_results:
+            nid = r["node_id"]
+            merged[nid] = {
+                "node_id": nid,
+                "value_score": r["normalized_score"],
+                "mcts_score": 0.0,
+                "content": r["content"],
+                "depth": r["depth"],
+                "title": r.get("title"),
+                "path": r.get("path", [nid]),
+                "sources": ["value"],
+                "visit_count": 0,
+            }
+            self._visited_nodes.add(nid)
+
+        # Add/merge MCTS results
+        for r in mcts_results:
+            nid = r.document_node_id
+            norm_score = getattr(r, '_norm_score', r.score)
+
+            if nid in merged:
+                # Node found by both - combine scores
+                merged[nid]["mcts_score"] = norm_score
+                merged[nid]["sources"].append("mcts")
+                merged[nid]["visit_count"] = r.visit_count
+            else:
+                merged[nid] = {
+                    "node_id": nid,
+                    "value_score": 0.0,
+                    "mcts_score": norm_score,
+                    "content": r.content,
+                    "depth": r.depth,
+                    "title": None,
+                    "path": r.path,
+                    "sources": ["mcts"],
+                    "visit_count": r.visit_count,
+                }
+            self._visited_nodes.add(nid)
+
+        # Compute diversity scores
+        candidates = list(merged.values())
+
+        path_prefixes = Counter(
+            "/".join(r.get("path", [])[:2]) if len(r.get("path", [])) >= 2 else r["node_id"]
+            for r in candidates
+        )
+
+        for candidate in candidates:
+            path = candidate.get("path", [])
+            prefix = "/".join(path[:2]) if len(path) >= 2 else candidate["node_id"]
+            # Cap diversity boost to prevent extreme values
+            candidate["diversity_score"] = min(1.0 / path_prefixes[prefix], 1.0)
+
+        # Combine scores - FIXED: use options weights once, not twice
+        for candidate in candidates:
+            # Hybrid score = weighted blend of value and mcts, then diversity
+            blended = max(candidate["value_score"], candidate["mcts_score"])
+            # If both sources agree, boost; if only one source, use that
+            if candidate["value_score"] > 0 and candidate["mcts_score"] > 0:
+                # Both found it - boost
+                blended = 0.6 * max(candidate["value_score"], candidate["mcts_score"]) + \
+                          0.4 * ((candidate["value_score"] + candidate["mcts_score"]) / 2)
+
+            candidate["combined_score"] = (
+                (1 - options.diversity_weight) * blended +
+                options.diversity_weight * candidate.get("diversity_score", 0.0)
+            )
+
+        candidates.sort(key=lambda x: x["combined_score"], reverse=True)
+
+        # Clean up for output
+        final = []
+        for c in candidates[:options.max_results]:
+            final.append({
+                "node_id": c["node_id"],
+                "score": round(c["combined_score"], 4),
+                "value_score": round(c["value_score"], 4),
+                "mcts_score": round(c["mcts_score"], 4),
+                "diversity_score": round(c.get("diversity_score", 0), 4),
+                "sources": c["sources"],
+                "visit_count": c["visit_count"],
+                "content": c["content"][:500] if c["content"] else "",
+                "depth": c["depth"],
+                "title": c.get("title"),
+                "path": c.get("path", []),
+            })
+
+        return final

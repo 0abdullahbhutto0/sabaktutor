@@ -120,7 +120,7 @@ class QuizGenerator:
         quiz_type: str,
         chapter_id: Optional[str] = None,
         unit_chapters: Optional[List[Dict[str, str]]] = None,
-        target_count: int = 20,
+        target_count: int = 10,
         duration_minutes: int = 20,
         passing_percent: int = 60,
         book_id: str = "",
@@ -155,7 +155,7 @@ class QuizGenerator:
             duration_minutes = 90
             passing_percent = 50
 
-        # Select nodes for quiz - NO chunking
+
         selected_nodes = self._select_nodes(nodes, target_count)
         if not selected_nodes:
             yield {"type": "error", "message": "No content available"}
@@ -165,7 +165,7 @@ class QuizGenerator:
         for i, node in enumerate(selected_nodes, 1):
             content_text += f"\n--- CONTENT {i} ---\n"
             content_text += f"Title: {node['node_title']}\n"
-            content_text += f"Content: {node['content'][:800]}\n"
+            content_text += f"Content: {node['content']}\n"
 
         prompt = self.prompts.quiz_batch(
             content_text=content_text,
@@ -187,10 +187,6 @@ class QuizGenerator:
         response_text = "".join(full_response)
         questions = self._parse_batch_response(response_text, selected_nodes)
         questions = questions[:target_count]
-        questions = self._balance_difficulty(questions)
-        questions = self._balance_correct_index(questions)
-
-        # Create and yield the quiz
         quiz = Quiz(
             quiz_type=quiz_type,
             book_title=book_title,
@@ -205,83 +201,7 @@ class QuizGenerator:
 
         yield {"type": "done", "quiz": quiz}
 
-    def generate_quiz(
-        self,
-        document_tree,
-        quiz_type: str,
-        chapter_id: Optional[str] = None,
-        unit_chapters: Optional[List[Dict[str, str]]] = None,
-        target_count: int = 20,
-        duration_minutes: int = 20,
-        passing_percent: int = 60,
-        book_id: str = "",
-        book_title: str = "",
-        title: Optional[str] = None,
-    ) -> Quiz:
-        """Synchronous generate quiz - collects all tokens first."""
-        if quiz_type == "chapter" and chapter_id:
-            nodes = self._get_chapter_nodes(document_tree, chapter_id)
-            chapter_ids = [chapter_id]
-            chapter_names = [chapter_id]
-            default_title = f"{chapter_id} - Chapter Quiz"
-        elif quiz_type == "unit" and unit_chapters:
-            nodes = []
-            chapter_ids = []
-            chapter_names = []
-            for ch in unit_chapters:
-                nodes.extend(self._get_chapter_nodes(document_tree, ch["id"]))
-                chapter_ids.append(ch["id"])
-                chapter_names.append(ch.get("name", ch["id"]))
-            default_title = f"Unit Test - {len(unit_chapters)} Chapters"
-            duration_minutes = 45
-            passing_percent = 50
-        else:
-            nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.content.strip()]
-            chapter_ids = []
-            chapter_names = []
-            default_title = f"{book_title} - Full Book Mock"
-            duration_minutes = 90
-            passing_percent = 50
-
-        selected_nodes = self._select_nodes(nodes, target_count)
-        if not selected_nodes or not self.llm:
-            return Quiz(quiz_type=quiz_type, book_title=book_title, title=title or default_title)
-
-        # Build content_text - NO chunking
-        content_text = ""
-        for i, node in enumerate(selected_nodes, 1):
-            content_text += f"\n--- CONTENT {i} ---\n"
-            content_text += f"Title: {node['node_title']}\n"
-            content_text += f"Content: {node['content'][:800]}\n"
-
-        prompt = self.prompts.quiz_batch(
-            content_text=content_text,
-            total_questions=target_count,
-            book_title=book_title,
-        )
-
-        full_response = []
-        for token in self.llm.stream_complete(prompt, max_tokens=8000):
-            full_response.append(token)
-
-        response_text = "".join(full_response)
-        questions = self._parse_batch_response(response_text, selected_nodes)
-        questions = questions[:target_count]
-        questions = self._balance_difficulty(questions)
-        questions = self._balance_correct_index(questions)
-
-        return Quiz(
-            quiz_type=quiz_type,
-            book_title=book_title,
-            title=title or default_title,
-            chapter_ids=chapter_ids,
-            chapter_names=chapter_names,
-            questions=questions,
-            duration_minutes=duration_minutes,
-            passing_percent=passing_percent,
-            book_id=book_id,
-        )
-
+    
     def _get_chapter_nodes(self, document_tree, chapter_id: str) -> List[Any]:
         """Get all nodes that belong to a specific chapter."""
         nodes = document_tree.get_chapter_nodes(chapter_id)
@@ -353,58 +273,3 @@ class QuizGenerator:
             return questions
         except (json.JSONDecodeError, KeyError):
             return []
-
-    def _balance_difficulty(self, questions: List[MCQQuestion]) -> List[MCQQuestion]:
-        """Ensure 25% easy, 50% medium, 25% hard."""
-        by_diff = {"easy": [], "medium": [], "hard": []}
-        for q in questions:
-            by_diff[q.difficulty.value].append(q)
-
-        total = len(questions)
-        targets = {"easy": max(1, total // 4), "medium": total // 2, "hard": total // 4}
-
-        balanced = []
-        for diff, target in targets.items():
-            balanced.extend(by_diff.get(diff, [])[:target])
-
-        remaining = [q for q in questions if q not in balanced]
-        while len(balanced) < total and remaining:
-            balanced.append(remaining.pop(0))
-
-        random.shuffle(balanced)
-        return balanced
-
-    def _balance_correct_index(self, questions: List[MCQQuestion]) -> List[MCQQuestion]:
-        """Ensure correct answers are fairly distributed across A(0), B(1), C(2), D(3)."""
-        if not questions:
-            return questions
-
-        correct_indices = [
-            next((i for i, o in enumerate(q.options) if o.is_correct), 0)
-            for q in questions
-        ]
-        counts = Counter(correct_indices)
-
-        total = len(questions)
-        targets = {i: total // 4 + (1 if i < total % 4 else 0) for i in range(4)}
-
-        excess = []
-        deficit = []
-        for i in range(4):
-            diff = counts[i] - targets[i]
-            if diff > 0:
-                excess.extend([i] * diff)
-            elif diff < 0:
-                deficit.extend([i] * (-diff))
-
-        changes = dict(zip(excess, deficit))
-        for q in questions:
-            correct_idx = next((i for i, o in enumerate(q.options) if o.is_correct), 0)
-            if correct_idx in changes:
-                for opt in q.options:
-                    opt.is_correct = False
-                q.options[changes[correct_idx]].is_correct = True
-                del changes[correct_idx]
-
-        random.shuffle(questions)
-        return questions
