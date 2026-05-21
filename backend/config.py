@@ -80,7 +80,7 @@ class SearchConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     mcts: MCTSConfig = field(default_factory=MCTSConfig)
 
-    top_k_chunks: int = 10
+    top_k_nodes: int = 10
     score_aggregation: str = "mean"
     use_square_root_normalization: bool = True
 

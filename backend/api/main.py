@@ -55,8 +55,6 @@ async def lifespan(app: FastAPI):
             services.book_manager.register_book(
                 book_id=book["book_id"],
                 title=book["title"],
-                subject="Computer Science",
-                grade="9",
                 file_path=book["file_path"],
             )
         except Exception as e:
@@ -89,8 +87,6 @@ async def list_books(services: Services = Depends(get_services)):
             {
                 "book_id": b.book_id,
                 "title": b.title,
-                "subject": b.subject,
-                "grade": b.grade,
                 "is_indexed": b.is_indexed,
             }
             for b in books
@@ -144,11 +140,10 @@ async def generate_quiz_stream(
 
         async for event in services.quiz_generator.generate_quiz_streaming(
             document_tree=services._active_tree,
-            subject=req.subject or "Computer Science",
-            grade=req.grade or "9",
+            book_title=req.book_title,
             quiz_type=req.quiz_type,
             chapter_id=req.chapter_id,
-            unit_chapters=[{"id": c.id, "name": c.name} for c in (req.unit_chapters or [])],
+            unit_chapters=[{"id": c} for c in (req.unit_chapters or [])],
             target_count=req.target_count,
             duration_minutes=req.duration_minutes,
             passing_percent=req.passing_percent,
@@ -180,15 +175,13 @@ async def generate_quiz_stream(
     )
 
 async def background_quiz_generator(req: QuizBackgroundGenerateRequest, services: Services):
-    import sys
     print(f"--- STARTING BACKGROUND GEN FOR {req.level_id} ---", flush=True)
     try:
         services.load_book(req.book_id)
         print(f"--- BOOK LOADED FOR {req.level_id} ---", flush=True)
         async for event in services.quiz_generator.generate_quiz_streaming(
             document_tree=services._active_tree,
-            subject=req.subject or "Computer Science",
-            grade=req.grade or "9",
+            book_title=req.book_title,  # Changed from subject
             quiz_type=req.quiz_type,
             chapter_id=req.chapter_id,
             unit_chapters=[{"id": c.id, "name": c.name} for c in (req.unit_chapters or [])],

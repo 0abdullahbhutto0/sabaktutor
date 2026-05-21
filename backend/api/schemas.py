@@ -20,11 +20,10 @@ class UnitChapter(BaseModel):
 
 class QuizGenerateRequest(BaseModel):
     book_id: str
+    book_title: str = ""
     quiz_type: str = Field(..., pattern="^(chapter|unit|full)$")
     chapter_id: Optional[str] = None
     unit_chapters: Optional[List[UnitChapter]] = None
-    subject: Optional[str] = None
-    grade: Optional[str] = None
     title: Optional[str] = None
     target_count: int = 20
     duration_minutes: int = 20

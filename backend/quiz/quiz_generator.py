@@ -36,7 +36,7 @@ class MCQQuestion:
     id: str = ""
     stem: str = ""
     options: List[MCQOption] = field(default_factory=list)
-    source_chunk_id: str = ""
+    source_node_id: str = ""
     difficulty: Difficulty = Difficulty.MEDIUM
     topic: str = ""
     marks: int = 1
@@ -52,7 +52,7 @@ class MCQQuestion:
             "stem": self.stem,
             "options": [{"text": o.text, "is_correct": o.is_correct} for o in self.options],
             "correct_index": next((i for i, o in enumerate(self.options) if o.is_correct), 0),
-            "source_chunk_id": self.source_chunk_id,
+            "source_node_id": self.source_node_id,
             "difficulty": self.difficulty.value,
             "topic": self.topic,
             "marks": self.marks,
@@ -64,8 +64,7 @@ class MCQQuestion:
 class Quiz:
     id: str = ""
     quiz_type: str = "chapter"
-    subject: str = ""
-    grade: str = ""
+    book_title: str = ""
     title: str = ""
     chapter_ids: List[str] = field(default_factory=list)
     chapter_names: List[str] = field(default_factory=list)
@@ -86,8 +85,7 @@ class Quiz:
         return {
             "id": self.id,
             "quiz_type": self.quiz_type,
-            "subject": self.subject,
-            "grade": self.grade,
+            "book_title": self.book_title,
             "title": self.title,
             "chapter_ids": self.chapter_ids,
             "chapter_names": self.chapter_names,
@@ -107,20 +105,18 @@ class QuizGenerator:
     def __init__(
         self,
         api_key: str = "",
-        questions_per_chunk: int = 2,
+        questions_per_node: int = 3,
         model: str = "google/gemini-2.0-flash-001",
     ):
         self.api_key = api_key
         self.model = model
-        self.questions_per_chunk = questions_per_chunk
+        self.questions_per_node = questions_per_node
         self.llm = StreamingLLMClient(api_key, model) if api_key else None
         self.prompts = Prompts()
 
     async def generate_quiz_streaming(
         self,
         document_tree,
-        subject: str,
-        grade: str,
         quiz_type: str,
         chapter_id: Optional[str] = None,
         unit_chapters: Optional[List[Dict[str, str]]] = None,
@@ -128,11 +124,12 @@ class QuizGenerator:
         duration_minutes: int = 20,
         passing_percent: int = 60,
         book_id: str = "",
+        book_title: str = "",
         title: Optional[str] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate quiz with streaming tokens as they arrive.
-        Yields token events and finally the complete quiz.
+        NO subject/grade - uses book_title instead.
         """
         if quiz_type == "chapter" and chapter_id:
             nodes = self._get_chapter_nodes(document_tree, chapter_id)
@@ -151,30 +148,29 @@ class QuizGenerator:
             duration_minutes = 45
             passing_percent = 50
         else:  # full book
-            nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.chunks]
+            nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.content.strip()]
             chapter_ids = []
             chapter_names = []
-            default_title = f"{subject} Grade {grade} - Full Book Mock"
+            default_title = f"{book_title} - Full Book Mock"
             duration_minutes = 90
             passing_percent = 50
 
-        selected_chunks = self._select_chunks(nodes, target_count)
-        if not selected_chunks:
+        # Select nodes for quiz - NO chunking
+        selected_nodes = self._select_nodes(nodes, target_count)
+        if not selected_nodes:
             yield {"type": "error", "message": "No content available"}
             return
 
-        # Build chunks_text for the prompt
-        chunks_text = ""
-        for i, chunk in enumerate(selected_chunks, 1):
-            chunks_text += f"\n--- CHUNK {i} ---\n"
-            chunks_text += f"Title: {chunk['node_title']}\n"
-            chunks_text += f"Content: {chunk['content'][:800]}\n"
+        content_text = ""
+        for i, node in enumerate(selected_nodes, 1):
+            content_text += f"\n--- CONTENT {i} ---\n"
+            content_text += f"Title: {node['node_title']}\n"
+            content_text += f"Content: {node['content'][:800]}\n"
 
         prompt = self.prompts.quiz_batch(
-            chunks_text=chunks_text,
+            content_text=content_text,
             total_questions=target_count,
-            subject=subject,
-            grade=grade,
+            book_title=book_title,
         )
 
         if not self.llm:
@@ -185,12 +181,11 @@ class QuizGenerator:
         full_response = []
         async for token in self.llm.stream_complete(prompt, max_tokens=8000):
             full_response.append(token)
-            # Yield each token for real-time streaming
             yield {"type": "token", "token": token}
 
         # Parse the complete response
         response_text = "".join(full_response)
-        questions = self._parse_batch_response(response_text, selected_chunks)
+        questions = self._parse_batch_response(response_text, selected_nodes)
         questions = questions[:target_count]
         questions = self._balance_difficulty(questions)
         questions = self._balance_correct_index(questions)
@@ -198,8 +193,7 @@ class QuizGenerator:
         # Create and yield the quiz
         quiz = Quiz(
             quiz_type=quiz_type,
-            subject=subject,
-            grade=grade,
+            book_title=book_title,
             title=title or default_title,
             chapter_ids=chapter_ids,
             chapter_names=chapter_names,
@@ -214,8 +208,6 @@ class QuizGenerator:
     def generate_quiz(
         self,
         document_tree,
-        subject: str,
-        grade: str,
         quiz_type: str,
         chapter_id: Optional[str] = None,
         unit_chapters: Optional[List[Dict[str, str]]] = None,
@@ -223,6 +215,7 @@ class QuizGenerator:
         duration_minutes: int = 20,
         passing_percent: int = 60,
         book_id: str = "",
+        book_title: str = "",
         title: Optional[str] = None,
     ) -> Quiz:
         """Synchronous generate quiz - collects all tokens first."""
@@ -243,28 +236,28 @@ class QuizGenerator:
             duration_minutes = 45
             passing_percent = 50
         else:
-            nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.chunks]
+            nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.content.strip()]
             chapter_ids = []
             chapter_names = []
-            default_title = f"{subject} Grade {grade} - Full Book Mock"
+            default_title = f"{book_title} - Full Book Mock"
             duration_minutes = 90
             passing_percent = 50
 
-        selected_chunks = self._select_chunks(nodes, target_count)
-        if not selected_chunks or not self.llm:
-            return Quiz(quiz_type=quiz_type, subject=subject, grade=grade, title=title or default_title)
+        selected_nodes = self._select_nodes(nodes, target_count)
+        if not selected_nodes or not self.llm:
+            return Quiz(quiz_type=quiz_type, book_title=book_title, title=title or default_title)
 
-        chunks_text = ""
-        for i, chunk in enumerate(selected_chunks, 1):
-            chunks_text += f"\n--- CHUNK {i} ---\n"
-            chunks_text += f"Title: {chunk['node_title']}\n"
-            chunks_text += f"Content: {chunk['content'][:800]}\n"
+        # Build content_text - NO chunking
+        content_text = ""
+        for i, node in enumerate(selected_nodes, 1):
+            content_text += f"\n--- CONTENT {i} ---\n"
+            content_text += f"Title: {node['node_title']}\n"
+            content_text += f"Content: {node['content'][:800]}\n"
 
         prompt = self.prompts.quiz_batch(
-            chunks_text=chunks_text,
+            content_text=content_text,
             total_questions=target_count,
-            subject=subject,
-            grade=grade,
+            book_title=book_title,
         )
 
         full_response = []
@@ -272,15 +265,14 @@ class QuizGenerator:
             full_response.append(token)
 
         response_text = "".join(full_response)
-        questions = self._parse_batch_response(response_text, selected_chunks)
+        questions = self._parse_batch_response(response_text, selected_nodes)
         questions = questions[:target_count]
         questions = self._balance_difficulty(questions)
         questions = self._balance_correct_index(questions)
 
         return Quiz(
             quiz_type=quiz_type,
-            subject=subject,
-            grade=grade,
+            book_title=book_title,
             title=title or default_title,
             chapter_ids=chapter_ids,
             chapter_names=chapter_names,
@@ -293,28 +285,39 @@ class QuizGenerator:
     def _get_chapter_nodes(self, document_tree, chapter_id: str) -> List[Any]:
         """Get all nodes that belong to a specific chapter."""
         nodes = document_tree.get_chapter_nodes(chapter_id)
-        return [n for n in nodes if n.chunks]
+        # NO chunking - return nodes with content directly
+        return [n for n in nodes if n.content.strip()]
 
-    def _select_chunks(self, nodes: List[Any], target_count: int) -> List[Dict]:
-        """Select representative chunks from nodes for quiz generation."""
-        all_chunks = []
-        for node in nodes:
-            for chunk in node.chunks:
-                if chunk.content.strip():
-                    all_chunks.append({
-                        "chunk_id": chunk.id,
-                        "content": chunk.content,
-                        "node_title": node.title or "",
-                    })
+    def _select_nodes(self, nodes: List[Any], target_count: int) -> List[Dict]:
+        """
+        Select representative nodes from the tree for quiz generation.
+        NO chunking - uses node content directly.
+        """
+        if not nodes:
+            return []
+        
+        content_nodes = [n for n in nodes if n.content.strip()]
 
-        if not all_chunks:
+        if not content_nodes:
             return []
 
-        max_chunks = min(len(all_chunks), max(target_count // 2, 5))
-        step = max(1, len(all_chunks) // max_chunks) if len(all_chunks) > max_chunks else 1
-        return [all_chunks[i] for i in range(0, len(all_chunks), step)][:max_chunks]
+        max_nodes = min(len(content_nodes), max(target_count // 2, 5))
+        step = max(1, len(content_nodes) // max_nodes) if len(content_nodes) > max_nodes else 1
 
-    def _parse_batch_response(self, response: str, chunks: List[Dict]) -> List[MCQQuestion]:
+        selected = []
+        for i in range(0, len(content_nodes), step):
+            node = content_nodes[i]
+            selected.append({
+                "node_id": node.id,
+                "content": node.content,
+                "node_title": node.title or "",
+            })
+            if len(selected) >= max_nodes:
+                break
+
+        return selected
+
+    def _parse_batch_response(self, response: str, nodes: List[Dict]) -> List[MCQQuestion]:
         """Parse all questions from a single batch response."""
         try:
             text = response.strip()
@@ -337,13 +340,13 @@ class QuizGenerator:
                     opts[0].is_correct = True
 
                 chunk_ref = qd.get("chunk_ref", 1)
-                chunk_idx = min(chunk_ref - 1, len(chunks) - 1) if chunk_ref > 0 else 0
-                source_chunk_id = chunks[chunk_idx]["chunk_id"] if chunks else ""
+                chunk_idx = min(chunk_ref - 1, len(nodes) - 1) if chunk_ref > 0 else 0
+                source_node_id = nodes[chunk_idx]["node_id"] if nodes else ""
 
                 questions.append(MCQQuestion(
                     stem=qd["stem"],
                     options=opts,
-                    source_chunk_id=source_chunk_id,
+                    source_node_id=source_node_id,
                     difficulty=Difficulty(qd.get("difficulty", "medium")),
                     topic=qd.get("topic", "general"),
                 ))
