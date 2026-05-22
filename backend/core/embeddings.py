@@ -55,9 +55,6 @@ class EmbeddingManager:
     def _make_embedding_request(self, texts: List[str], is_query: bool = False) -> np.ndarray:
         """
         Make embedding request to OpenRouter API.
-        
-        The nvidia/llama-nemotron-embed-vl-1b-v2 model uses query/passage prefixes
-        for optimal retrieval performance.
         """
         if not self.api_key:
             raise RuntimeError(
@@ -65,7 +62,6 @@ class EmbeddingManager:
                 "Set OPENROUTER_API_KEY in .env or pass api_key to EmbeddingManager."
             )
 
-        # Prefix texts for query vs document embedding
         prefix = "query: " if is_query else "passage: "
         prefixed_texts = [prefix + t for t in texts]
 
@@ -103,9 +99,8 @@ class EmbeddingManager:
                 result = np.array(embeddings, dtype=np.float32)
 
                 if self.normalize:
-                    # L2 normalize
                     norms = np.linalg.norm(result, axis=1, keepdims=True)
-                    norms = np.where(norms == 0, 1, norms)  # avoid div by zero
+                    norms = np.where(norms == 0, 1, norms)
                     result = result / norms
 
                 return result
@@ -129,6 +124,17 @@ class EmbeddingManager:
             f"Embedding request failed after {self.max_retries} attempts: {last_error}"
         )
 
+    def encode_query(self, query: str) -> np.ndarray:
+        """Encode a query string using query-specific prefix for better retrieval."""
+        cached = self._cache.get(f"query:{query}")
+        if cached is not None:
+            return cached
+
+        embedding = self._make_embedding_request([query], is_query=True)
+        result = embedding[0]
+        self._add_to_cache(f"query:{query}", result)
+        return result
+    
     def encode(
         self,
         texts: Union[str, List[str]],
@@ -162,17 +168,6 @@ class EmbeddingManager:
             all_embeddings.append(batch_embeddings)
 
         result = np.vstack(all_embeddings)
-        return result
-
-    def encode_query(self, query: str) -> np.ndarray:
-        """Encode a query string using query-specific prefix for better retrieval."""
-        cached = self._cache.get(f"query:{query}")
-        if cached is not None:
-            return cached
-
-        embedding = self._make_embedding_request([query], is_query=True)
-        result = embedding[0]
-        self._add_to_cache(f"query:{query}", result)
         return result
 
     def _add_to_cache(self, key: str, embedding: np.ndarray) -> None:

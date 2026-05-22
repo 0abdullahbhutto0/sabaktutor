@@ -27,7 +27,7 @@ class StreamingLLMClient:
         prompt: str,
         system: str = "",
         temperature: float = 0.7,
-        max_tokens: int = 2048,
+        max_tokens: int = 16000,
     ) -> AsyncGenerator[str, None]:
         """Stream completion from OpenRouter."""
         messages = []

@@ -122,12 +122,12 @@ class HybridSearchEngine:
         if not self._indexed:
             raise ValueError("No documents indexed. Call index_tree() first.")
 
-        with self._lock:
-            self._visited_nodes.clear()
+        self._visited_nodes.clear()
 
-        # FIXED: Sequential execution instead of ThreadPoolExecutor
-        # Both are CPU-bound and hit same API - threads add overhead + race conditions
-        results = self._search_hybrid(query, options)
+        # Compute query embedding ONCE per request — sync, no await
+        query_embedding = self.embedding_manager.encode_query(query)
+
+        results = self._search_hybrid(query, options, query_embedding)
         search_time = time.time() - start_time
 
         return SearchResponse(
@@ -147,32 +147,33 @@ class HybridSearchEngine:
             },
         )
 
-    def _search_hybrid(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
+    def _search_hybrid(self, query: str, options: SearchOptions, query_embedding) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining value-based and MCTS-based approaches.
-        FIXED: Proper score normalization, no double-weighting, sequential execution.
+        Query embedding computed once and passed through.
         """
         # Phase 1: Value-based search (fast, broad recall)
-        value_results = self._search_value_only(query, options)
+        value_results = self._search_value_only(query, options, query_embedding)
 
         if self.tree:
-            self.mcts.initialize(self.tree, query=query)
+            self.mcts.initialize(self.tree, query=query, query_embedding=query_embedding)
 
         self.mcts.max_iterations = options.max_iterations
         self.mcts.early_stop_threshold = options.early_stop_threshold
-        mcts_results = self.mcts.search(query, options.max_results, options.early_stop)
+        
+        # Run MCTS in thread pool to avoid blocking event loop
+        mcts_results = self.mcts.search(query, options.max_results, options.early_stop, query_embedding)
+        
         return self._merge_results(value_results, mcts_results, query, options)
 
-    def _search_value_only(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
+    def _search_value_only(self, query: str, options: SearchOptions, query_embedding) -> List[Dict[str, Any]]:
         """
         Perform value-based search only using embeddings.
-        FIXED: Only search nodes with actual content, use vector store directly.
         """
         results = []
         if not self.tree:
             return results
 
-        # Get all valid leaf/content nodes
         nodes_to_evaluate = [
             node.id for node in self.tree.get_all_nodes()
             if not node.is_root and len(node.content) > 50
@@ -181,18 +182,14 @@ class HybridSearchEngine:
         if not nodes_to_evaluate:
             return results
 
-        # FIXED: Limit candidates to avoid passing thousands of IDs for nothing
-        # The vector store search is global anyway, so we just need enough for coverage
-        # If tree is huge, sample strategically (e.g., all chapter-level nodes)
         if len(nodes_to_evaluate) > 500:
-            # Prioritize deeper nodes (more specific content)
             nodes_to_evaluate = sorted(
                 nodes_to_evaluate,
                 key=lambda nid: self.tree.get_node(nid).depth if self.tree.get_node(nid) else 0,
                 reverse=True,
             )[:500]
 
-        value_estimates = self.value_function.predict_values(query, nodes_to_evaluate)
+        value_estimates = self.value_function.predict_values(query, nodes_to_evaluate, query_embedding=query_embedding)
 
         for node_id, score in value_estimates.items():
             if score <= 0.0:
@@ -211,8 +208,7 @@ class HybridSearchEngine:
                 self._visited_nodes.add(node_id)
 
         results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:options.max_results * 2]  # Get more for merging
-
+        return results[:options.max_results * 2]
     def _merge_results(
         self,
         value_results: List[Dict[str, Any]],

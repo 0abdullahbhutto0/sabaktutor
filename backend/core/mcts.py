@@ -118,6 +118,7 @@ class MonteCarloTreeSearch:
         document_tree,
         root_node_id: Optional[str] = None,
         query: Optional[str] = None,
+        query_embedding: Optional[np.ndarray] = None
     ) -> str:
         """Initialize MCTS with document tree."""
         self.document_tree = document_tree
@@ -141,7 +142,12 @@ class MonteCarloTreeSearch:
         self._expand_node(root_mcts.id)
 
         if query:
-            self._initialize_priors(query)
+            self._cached_query = query
+            if query_embedding is not None:
+                self._query_embedding = query_embedding
+            else:
+                self._query_embedding = self.value_function.embedding_manager.encode_query(query)
+                self._initialize_priors(query,query_embedding=self._query_embedding)
 
         return root_mcts.id
 
@@ -178,9 +184,8 @@ class MonteCarloTreeSearch:
 
         mcts_node.state = NodeState.EXPANDED
 
-    def _initialize_priors(self, query: str) -> None:
+    def _initialize_priors(self, query: str, query_embedding = None) -> None:
         """Initialize prior probabilities using value function."""
-        # FIXED: Get all document node IDs (not MCTS node IDs)
         doc_node_ids = list(self._doc_to_mcts.keys())
 
         # Remove root if present
@@ -190,14 +195,8 @@ class MonteCarloTreeSearch:
         if not doc_node_ids:
             return
 
-        # FIXED: Cache query embedding for reuse
-        self._cached_query = query
-        self._query_embedding = self.value_function.embedding_manager.encode_query(query)
-        if self._query_embedding.ndim == 2:
-            self._query_embedding = self._query_embedding[0]
-
         value_estimates = self.value_function.predict_values(
-            query, doc_node_ids, query_embedding=self._query_embedding
+            query, doc_node_ids, query_embedding=query_embedding
         )
 
         for mcts_node in self.nodes.values():
@@ -210,6 +209,7 @@ class MonteCarloTreeSearch:
         query: str,
         max_results: int = 10,
         early_stop: bool = True,
+        query_embedding: Optional[np.ndarray] = None
     ) -> List[SearchResult]:
         """Perform MCTS search."""
         if not self.root_id:
@@ -220,11 +220,13 @@ class MonteCarloTreeSearch:
         self._best_score = 0.0
         self._best_node_id = None
 
-        # FIXED: Cache query embedding once for the entire search
         self._cached_query = query
-        self._query_embedding = self.value_function.embedding_manager.encode_query(query)
+        if query_embedding is not None:
+            self._query_embedding = query_embedding
+        else:
+            self._query_embedding = self.value_function.embedding_manager.encode_query(query)
         if self._query_embedding.ndim == 2:
-            self._query_embedding = self._query_embedding[0]
+            self._query_embedding = self._query_embedding[0] 
 
         for iteration in range(self.max_iterations):
             path = self._select(self.root_id)

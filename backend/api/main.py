@@ -106,7 +106,7 @@ async def ask_stream(req: AskRequest, services: Services = Depends(get_services)
         raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
 
     async def token_generator() -> AsyncGenerator[str, None]:
-        async for token in services.ask_stream(req.query, max_results=3):
+        async for token in services.ask_stream(req.query, max_results=10):
             yield sse_stream("token", {"token": token})
         yield sse_stream("done", {"status": "complete"})
 
@@ -140,7 +140,6 @@ async def generate_quiz_stream(
 
         async for event in services.quiz_generator.generate_quiz_streaming(
             document_tree=services._active_tree,
-            book_title=req.book_title,
             quiz_type=req.quiz_type,
             chapter_id=req.chapter_id,
             unit_chapters=[{"id": c} for c in (req.unit_chapters or [])],
@@ -181,7 +180,6 @@ async def background_quiz_generator(req: QuizBackgroundGenerateRequest, services
         print(f"--- BOOK LOADED FOR {req.level_id} ---", flush=True)
         async for event in services.quiz_generator.generate_quiz_streaming(
             document_tree=services._active_tree,
-            book_title=req.book_title,  # Changed from subject
             quiz_type=req.quiz_type,
             chapter_id=req.chapter_id,
             unit_chapters=[{"id": c.id, "name": c.name} for c in (req.unit_chapters or [])],
@@ -220,7 +218,7 @@ async def health():
     return {"status": "ok", "version": "2.0.0", "streaming": True}
 
 @app.post("/debug/search")
-async def debug_search(req: AskRequest, services: Services = Depends(get_services)):
+def debug_search(req: AskRequest, services: Services = Depends(get_services)):
     services.load_book(req.book_id)
     results = services.search(req.query, max_results=10)
     return {

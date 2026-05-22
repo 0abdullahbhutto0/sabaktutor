@@ -88,14 +88,14 @@ class Services:
         self._active_tree = book_data["tree"]
         self._active_book_title = book_data["metadata"].title
 
-    def search(self, query: str, max_results: int = 5):
+    def search(self, query: str, max_results: int = 10):
         if self._active_engine is None:
             raise RuntimeError("No book loaded")
         options = SearchOptions(max_results=max_results)
         response = self._active_engine.search(query, options)
         return response.results
 
-    async def ask_stream(self, query: str, max_results: int = 3) -> AsyncGenerator[str, None]:
+    async def ask_stream(self, query: str, max_results: int = 10) -> AsyncGenerator[str, None]:
         """Async streaming ask with custom prompts."""
         results = self.search(query, max_results)
         if not results:
@@ -103,7 +103,7 @@ class Services:
             return
 
         context = "\n\n".join(
-            f"Source: {r.get('title', 'Untitled')}\n{r.get('content', '')}"
+            f"Source: {r.get('title', 'Untitled')}\n{r.get('content', '')}\n{r.get('start_index',0)}"
             for r in results
         )
         book_title = self._active_book_title or ""

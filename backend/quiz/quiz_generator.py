@@ -85,7 +85,6 @@ class Quiz:
         return {
             "id": self.id,
             "quiz_type": self.quiz_type,
-            "book_title": self.book_title,
             "title": self.title,
             "chapter_ids": self.chapter_ids,
             "chapter_names": self.chapter_names,
@@ -151,7 +150,7 @@ class QuizGenerator:
             nodes = [n for n in document_tree.get_all_nodes() if not n.is_root and n.content.strip()]
             chapter_ids = []
             chapter_names = []
-            default_title = f"{book_title} - Full Book Mock"
+            default_title = f"{book_id} - Full Book Mock"
             duration_minutes = 90
             passing_percent = 50
 
@@ -170,7 +169,7 @@ class QuizGenerator:
         prompt = self.prompts.quiz_batch(
             content_text=content_text,
             total_questions=target_count,
-            book_title=book_title,
+            book_id=book_id,
         )
 
         if not self.llm:
@@ -179,7 +178,7 @@ class QuizGenerator:
 
         # Stream tokens as they arrive
         full_response = []
-        async for token in self.llm.stream_complete(prompt, max_tokens=8000):
+        async for token in self.llm.stream_complete(prompt, max_tokens=12000):
             full_response.append(token)
             yield {"type": "token", "token": token}
 
@@ -189,7 +188,7 @@ class QuizGenerator:
         questions = questions[:target_count]
         quiz = Quiz(
             quiz_type=quiz_type,
-            book_title=book_title,
+            book_title=book_id,
             title=title or default_title,
             chapter_ids=chapter_ids,
             chapter_names=chapter_names,

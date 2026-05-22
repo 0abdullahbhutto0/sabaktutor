@@ -242,17 +242,11 @@ class ValueFunction:
         if self.vector_store.count() == 0:
             return {node_id: 0.5 for node_id in candidate_nodes}
 
-        # Use provided embedding or compute+cache
         if query_embedding is not None:
             q_emb = query_embedding
         else:
-            q_emb = self._get_query_embedding(query)
-
-        # FIXED: For small candidate sets (MCTS single-node eval), we need to
-        # search more broadly and filter, OR use a candidate-aware search.
-        # Strategy: search with top_k = max(top_k, len(candidate_nodes)) to ensure
-        # we don't miss candidates, then filter.
-        search_k = max(self.top_k, len(candidate_nodes), min(len(candidate_nodes) * 2, self.vector_store.count()))
+            q_emb = self.embedding_manager.encode_query(query)
+        search_k = max(self.top_k, len(candidate_nodes))
 
         results = self.vector_store.search(q_emb, top_k=search_k)
 
