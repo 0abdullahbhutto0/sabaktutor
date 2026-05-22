@@ -78,12 +78,12 @@ A: White hat Hacker — tests cybersecurity terminology (distractors: Black Hat,
 # =============================================================================
 # PROMPT BUILDER
 # =============================================================================
-def _build_quiz_prompt(content_text: str, book_title: str, total_questions: int, patterns: str) -> str:
+def _build_quiz_prompt(content_text: str, book_id: str, total_questions: int, patterns: str) -> str:
     """Build optimized quiz generation prompt."""
     return f"""You are a Sindh Board examiner creating MCQs for Grade 9.
 
 SOURCE CONTENT (derive all questions strictly from this):
-Book: {book_title}
+Book: {book_id}
 
 {content_text}
 
@@ -129,9 +129,20 @@ RELEVANT CONTENT:
 STUDENT QUESTION:
 {query}
 
-Answer based ONLY on the provided content. Be concise, use simple language, and cite page numbers where possible.
+Instructions:
+- Answer ONLY from the provided content.
+- Use simple and clear language suitable for Sindh Board students.
+- If formulas, tables, OCR text, or parsed content look incomplete or broken, intelligently reconstruct them from the surrounding provided content only.
+- Do NOT mention missing context, parsing issues, excerpts, or limitations unless absolutely necessary.
+- Keep the answer concise and direct.
+- Include definitions, examples, formulas, or explanations if present in the content.
+- Mention page numbers if available in the content.
+- If the exact answer is not directly stated but can be reasonably inferred from the provided content, give the best educational answer based on it.
+- Avoid meta explanations like “the provided content does not mention”.
+- Never explain your reasoning process.
 
-Answer:"""
+Answer:
+"""
 
     @staticmethod
     def teacher_system(book_title: str = "") -> str:
@@ -141,19 +152,19 @@ Answer:"""
 Base all answers strictly on provided textbook content."""
 
     @staticmethod
-    def quiz_batch(content_text: str, total_questions: int, book_title: str) -> str:
+    def quiz_batch(content_text: str, total_questions: int, book_id: str) -> str:
         """Optimized batch MCQ generation prompt.
         
         Supports: phy_9, cs_9, and generic fallback.
         """
-        if "phy_9" in book_title:
-            return _build_quiz_prompt(content_text, book_title, total_questions, _PHY_9_PATTERNS)
-        elif "cs_9" in book_title:
-            return _build_quiz_prompt(content_text, book_title, total_questions, _CS_9_PATTERNS)
+        if "phy_9" in book_id:
+            return _build_quiz_prompt(content_text, book_id, total_questions, _PHY_9_PATTERNS)
+        elif "cs_9" in book_id:
+            return _build_quiz_prompt(content_text, book_id, total_questions, _CS_9_PATTERNS)
         else:
             # Generic fallback for any other book
             return _build_quiz_prompt(
-                content_text, book_title, total_questions,
+                content_text, book_id, total_questions,
                 "Generate questions that test understanding, not memorization. Use plausible distractors."
             )
 

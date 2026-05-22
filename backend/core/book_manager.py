@@ -113,6 +113,8 @@ class BookManager:
                 node_id = n.get("node_id") or str(uuid.uuid4())[:8]
                 content = n.get("text") or n.get("content", "")
                 title = n.get("title", "")
+                start_index = n.get('start_index',0)
+                end_index = n.get('end_index',0)
                 children = n.get("nodes", [])
 
                 if str(node_id) in ("0", "0000"):
@@ -125,6 +127,8 @@ class BookManager:
                     node_type=infer_node_type(title),
                     content=content,
                     title=title,
+                    start_index=start_index,
+                    end_index=end_index
                 )
                 tree.add_node(node, parent_id or tree.root_id)
 
