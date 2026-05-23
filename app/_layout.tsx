@@ -20,11 +20,12 @@ export default function RootLayout() {
     if (initializing) return;
 
     // Check if the current route is an authentication route (or the root page)
-    const inAuthGroup = segments.length === 0 || segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'index' || segments[0] === '';
+    const firstSegment = segments[0] as string | undefined;
+    const inAuthGroup = firstSegment === 'login' || firstSegment === 'signup' || firstSegment === 'index' || firstSegment === '';
 
     if (user && inAuthGroup) {
       // If logged in and on an auth screen, send them into the app
-      router.replace('/quiz-selection');
+      router.replace('/subject-selection');
     } else if (!user && !inAuthGroup) {
       // If logged out and inside the app, kick them back to the welcome screen
       router.replace('/');
@@ -42,6 +43,8 @@ export default function RootLayout() {
       <Stack.Screen name="subject-selection" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="quiz-selection" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+      <Stack.Screen name="lesson/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

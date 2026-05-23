@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Pressable, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
-import { preloadNextQuizzes } from './services/quizService';
+import { preloadNextQuizzes, BOOK_CHAPTERS } from './services/quizService';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
@@ -16,15 +16,20 @@ const NODE_SIZE = 96;
 
 export default function MasteryMap() {
   const router = useRouter();
+  const { subject } = useLocalSearchParams<{ subject?: string }>();
+  const subjectStr = subject || 'physics';
+  const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [progress, setProgress] = React.useState<Record<string, boolean>>({});
   const [masteryPoints, setMasteryPoints] = React.useState<number>(0);
+  const [userId, setUserId] = React.useState<string | null>(null);
 
   useEffect(() => {
-    preloadNextQuizzes(0);
+    preloadNextQuizzes(0, subjectStr);
     
     const user = auth().currentUser;
     if (!user) return;
+    setUserId(user.uid);
 
     // Listen to user progress and scores
     const unsubscribe = firestore()
@@ -50,14 +55,65 @@ export default function MasteryMap() {
       });
 
     return () => unsubscribe();
-  }, []);
+  }, [subjectStr]);
 
-  const levels = ['ch1', 'ch2', 'ch3', 'ch4', 'ch5'];
+  const chaptersMap = BOOK_CHAPTERS[subjectStr] || BOOK_CHAPTERS['physics'];
+  const chaptersCount = Object.keys(chaptersMap).length;
   
-  // A level is completed if it's in progress.
-  // A level is unlocked if it's ch1, or the previous level is completed.
-  const isCompleted = (levelId: string) => !!progress[levelId];
-  const isUnlocked = (index: number) => index === 0 || isCompleted(levels[index - 1]);
+  const nodes = Array.from({ length: chaptersCount * 2 }).map((_, i) => {
+    const chapterNum = Math.floor(i / 2) + 1;
+    const level = `ch${chapterNum}`;
+    const type = i % 2 === 0 ? 'lesson' : 'quiz';
+    const title = type === 'lesson' ? `Ch ${chapterNum}: Learn` : `Ch ${chapterNum}: Test`;
+    const globalId = userId ? `${type}_${userId}_${bookId}_${level}` : '';
+    return { index: i, type, level, title, globalId };
+  });
+
+  const isCompleted = (globalId: string) => !!progress[globalId];
+  
+  const isUnlocked = (index: number) => {
+    if (index === 0) return true;
+    const prevNode = nodes[index - 1];
+    return isCompleted(prevNode.globalId);
+  };
+
+  const getXForIndex = (index: number) => {
+    const mod = index % 4;
+    if (mod === 0) return CENTER_X;
+    if (mod === 1) return RIGHT_X;
+    if (mod === 2) return CENTER_X;
+    return LEFT_X;
+  };
+
+  const getIconName = (type: string, completed: boolean) => {
+    if (completed) return "check-circle";
+    if (type === 'lesson') return "menu-book";
+    return "star";
+  };
+
+  const renderPath = (i: number) => {
+    if (i >= nodes.length - 1) return null;
+    const startX = getXForIndex(i);
+    const endX = getXForIndex(i + 1);
+    const startY = i * 120;
+    const endY = (i + 1) * 120;
+    const midY = startY + 60;
+    
+    const unlocked = isUnlocked(i + 1);
+    
+    return (
+      <Path 
+        key={`path-${i}`}
+        d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
+        stroke={unlocked ? "#006d37" : "#bbcbbb"} 
+        strokeWidth={unlocked ? "6" : "4"} 
+        strokeDasharray={unlocked ? "" : "8 8"} 
+        fill="none"
+      />
+    );
+  };
+
+  const totalHeight = Math.max((nodes.length - 1) * 120 + NODE_SIZE, 600);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -78,150 +134,44 @@ export default function MasteryMap() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={{ width: MAP_WIDTH, height: 600, alignSelf: 'center', position: 'relative' }}>
+        <View style={{ width: MAP_WIDTH, height: totalHeight, alignSelf: 'center', position: 'relative' }}>
           {/* Dashed Path (SVG) */}
-          <Svg height="600" width={MAP_WIDTH} style={{ position: 'absolute', top: NODE_SIZE / 2, left: 0 }}>
-            {/* Center to Right (ch1 to ch2) */}
-            <Path 
-              d={`M ${CENTER_X} 0 C ${CENTER_X} 50, ${RIGHT_X} 50, ${RIGHT_X} 120`}
-              stroke={isUnlocked(1) ? "#006d37" : "#bbcbbb"} 
-              strokeWidth={isUnlocked(1) ? "6" : "4"} 
-              strokeDasharray={isUnlocked(1) ? "" : "8 8"} 
-              fill="none"
-            />
-            {/* Right to Center (ch2 to ch3) */}
-            <Path 
-              d={`M ${RIGHT_X} 120 C ${RIGHT_X} 180, ${CENTER_X} 180, ${CENTER_X} 240`}
-              stroke={isUnlocked(2) ? "#006d37" : "#bbcbbb"} 
-              strokeWidth={isUnlocked(2) ? "6" : "4"} 
-              strokeDasharray={isUnlocked(2) ? "" : "8 8"} 
-              fill="none"
-            />
-            {/* Center to Left (ch3 to ch4) */}
-            <Path 
-              d={`M ${CENTER_X} 240 C ${CENTER_X} 300, ${LEFT_X} 300, ${LEFT_X} 360`}
-              stroke={isUnlocked(3) ? "#006d37" : "#bbcbbb"} 
-              strokeWidth={isUnlocked(3) ? "6" : "4"} 
-              strokeDasharray={isUnlocked(3) ? "" : "8 8"} 
-              fill="none"
-            />
-            {/* Left to Center (ch4 to ch5) */}
-            <Path 
-              d={`M ${LEFT_X} 360 C ${LEFT_X} 420, ${CENTER_X} 420, ${CENTER_X} 480`}
-              stroke={isUnlocked(4) ? "#006d37" : "#bbcbbb"} 
-              strokeWidth={isUnlocked(4) ? "6" : "4"} 
-              strokeDasharray={isUnlocked(4) ? "" : "8 8"} 
-              fill="none"
-            />
+          <Svg height={totalHeight} width={MAP_WIDTH} style={{ position: 'absolute', top: NODE_SIZE / 2, left: 0 }}>
+            {nodes.map((_, i) => renderPath(i))}
           </Svg>
 
-          {/* Node 1 */}
-          <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 0 }]}>
-            <Pressable 
-              style={({ pressed }) => [
-                isCompleted('ch1') ? styles.nodeCompleted : styles.nodeUnlocked, 
-                pressed && styles.nodePressed
-              ]} 
-              onPress={() => router.push('/quiz/ch1')}
-            >
-              {isCompleted('ch1') ? (
-                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
-              ) : (
-                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
-              )}
-            </Pressable>
-            <View style={isCompleted('ch1') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
-              <Text style={isCompleted('ch1') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 1: Fundamentals</Text>
-            </View>
-          </View>
-
-          {/* Node 2 */}
-          <View style={[styles.nodeContainer, { left: RIGHT_X - NODE_SIZE/2, top: 120 }]}>
-            <Pressable 
-              style={({ pressed }) => [
-                !isUnlocked(1) ? styles.nodeLocked : isCompleted('ch2') ? styles.nodeCompleted : styles.nodeUnlocked,
-                isUnlocked(1) && pressed && styles.nodePressed
-              ]}
-              onPress={() => isUnlocked(1) && router.push('/quiz/ch2')}
-            >
-              {!isUnlocked(1) ? (
-                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-              ) : isCompleted('ch2') ? (
-                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
-              ) : (
-                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
-              )}
-            </Pressable>
-            <View style={!isUnlocked(1) ? styles.nodeLabelLocked : isCompleted('ch2') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
-              <Text style={!isUnlocked(1) ? styles.nodeLabelTextLocked : isCompleted('ch2') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 2: Operating System</Text>
-            </View>
-          </View>
-
-          {/* Node 3 */}
-          <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 240 }]}>
-            <Pressable 
-              style={({ pressed }) => [
-                !isUnlocked(2) ? styles.nodeLocked : isCompleted('ch3') ? styles.nodeCompleted : styles.nodeUnlocked,
-                isUnlocked(2) && pressed && styles.nodePressed
-              ]}
-              onPress={() => isUnlocked(2) && router.push('/quiz/ch3')}
-            >
-              {!isUnlocked(2) ? (
-                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-              ) : isCompleted('ch3') ? (
-                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
-              ) : (
-                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
-              )}
-            </Pressable>
-            <View style={!isUnlocked(2) ? styles.nodeLabelLocked : isCompleted('ch3') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
-              <Text style={!isUnlocked(2) ? styles.nodeLabelTextLocked : isCompleted('ch3') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 3: Office Automation</Text>
-            </View>
-          </View>
-
-          {/* Node 4 */}
-          <View style={[styles.nodeContainer, { left: LEFT_X - NODE_SIZE/2, top: 360 }]}>
-            <Pressable 
-              style={({ pressed }) => [
-                !isUnlocked(3) ? styles.nodeLocked : isCompleted('ch4') ? styles.nodeCompleted : styles.nodeUnlocked,
-                isUnlocked(3) && pressed && styles.nodePressed
-              ]}
-              onPress={() => isUnlocked(3) && router.push('/quiz/ch4')}
-            >
-              {!isUnlocked(3) ? (
-                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-              ) : isCompleted('ch4') ? (
-                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
-              ) : (
-                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
-              )}
-            </Pressable>
-            <View style={!isUnlocked(3) ? styles.nodeLabelLocked : isCompleted('ch4') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
-              <Text style={!isUnlocked(3) ? styles.nodeLabelTextLocked : isCompleted('ch4') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 4: Data Communication</Text>
-            </View>
-          </View>
-
-          {/* Node 5 */}
-          <View style={[styles.nodeContainer, { left: CENTER_X - NODE_SIZE/2, top: 480 }]}>
-            <Pressable 
-              style={({ pressed }) => [
-                !isUnlocked(4) ? styles.nodeLocked : isCompleted('ch5') ? styles.nodeCompleted : styles.nodeUnlocked,
-                isUnlocked(4) && pressed && styles.nodePressed
-              ]}
-              onPress={() => isUnlocked(4) && router.push('/quiz/ch5')}
-            >
-              {!isUnlocked(4) ? (
-                <MaterialIcons name="lock" size={40} color="#bbcbbb" />
-              ) : isCompleted('ch5') ? (
-                <MaterialIcons name="check-circle" size={48} color="#ffffff" />
-              ) : (
-                <MaterialIcons name="play-arrow" size={48} color="#ffffff" />
-              )}
-            </Pressable>
-            <View style={!isUnlocked(4) ? styles.nodeLabelLocked : isCompleted('ch5') ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
-              <Text style={!isUnlocked(4) ? styles.nodeLabelTextLocked : isCompleted('ch5') ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>Ch 5: Computer Networks</Text>
-            </View>
-          </View>
+          {nodes.map((node, i) => {
+            const x = getXForIndex(i);
+            const y = i * 120;
+            const completed = isCompleted(node.globalId);
+            const unlocked = isUnlocked(i);
+            const iconName = getIconName(node.type, completed) as any;
+            
+            return (
+              <View key={`node-${i}`} style={[styles.nodeContainer, { left: x - NODE_SIZE/2, top: y }]}>
+                <Pressable 
+                  style={({ pressed }) => [
+                    !unlocked ? styles.nodeLocked : completed ? styles.nodeCompleted : styles.nodeUnlocked,
+                    unlocked && pressed && styles.nodePressed
+                  ]}
+                  onPress={() => {
+                    if (unlocked) {
+                      router.push(`/${node.type}/${node.level}?subject=${subjectStr}` as any);
+                    }
+                  }}
+                >
+                  {!unlocked ? (
+                    <MaterialIcons name="lock" size={40} color="#bbcbbb" />
+                  ) : (
+                    <MaterialIcons name={iconName} size={48} color="#ffffff" />
+                  )}
+                </Pressable>
+                <View style={!unlocked ? styles.nodeLabelLocked : completed ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
+                  <Text style={!unlocked ? styles.nodeLabelTextLocked : completed ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>{node.title}</Text>
+                </View>
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -240,7 +190,7 @@ export default function MasteryMap() {
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Leaderboard</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/profile')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/profile', params: { subject: subjectStr } })}>
           <MaterialIcons name="person" size={28} color="#bbcbbb" />
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Profile</Text>
         </TouchableOpacity>

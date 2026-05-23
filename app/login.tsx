@@ -15,7 +15,7 @@ export default function Login() {
     try {
       const userCredential = await auth().signInWithEmailAndPassword(email, password);
       const userDoc = await firestore().collection('users').doc(userCredential.user.uid).get();
-      if (userDoc.exists && userDoc.data()?.grade) {
+      if (userDoc.data() && userDoc.data()?.grade) {
         router.replace('/subject-selection');
       } else {
         router.replace('/grade-selection');

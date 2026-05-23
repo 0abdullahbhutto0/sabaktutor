@@ -2,21 +2,22 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useState, useEffect } from 'react';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ChunkyButton from './components/ChunkyButton';
 
 export default function SubjectSelection() {
+  const { subject } = useLocalSearchParams();
   const router = useRouter();
   const [username, setUsername] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState<string | null>('physics');
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(typeof subject === 'string' ? subject : 'physics');
 
   useEffect(() => {
     const fetchUser = async () => {
       const currentUser = auth().currentUser;
       if (currentUser) {
         const userDoc = await firestore().collection('users').doc(currentUser.uid).get();
-        if (userDoc.exists) {
+        if (userDoc.data()) {
           const data = userDoc.data();
           if (data?.username) {
             setUsername(data.username);
@@ -32,26 +33,25 @@ export default function SubjectSelection() {
       <Text style={styles.headerTitle}>SELECT YOUR SUBJECTS (SINDH TEXTBOOK BOARD)</Text>
       
       <View style={styles.list}>
-        {/* Maths */}
+        {/* Maths - Disabled for now */}
         <Pressable 
-          style={({ pressed }) => [
+          disabled={true}
+          style={[
             styles.subjectCard, 
-            selectedSubject === 'maths' && styles.subjectCardSelected,
-            pressed && styles.cardPressed
+            { opacity: 0.5 }
           ]}
-          onPress={() => setSelectedSubject('maths')}
         >
-          <View style={[styles.iconContainer, { backgroundColor: '#fbbf24' }]}>
+          <View style={[styles.iconContainer, { backgroundColor: '#bbcbbb' }]}>
             <MaterialCommunityIcons name="sigma" size={28} color="#091d2e" />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.subjectTitle}>Maths</Text>
-            <Text style={styles.subjectSubtitle}>Logic & Problem Solving</Text>
+            <Text style={styles.subjectSubtitle}>Logic & Problem Solving (Coming Soon)</Text>
           </View>
           <MaterialIcons 
-            name={selectedSubject === 'maths' ? "radio-button-checked" : "radio-button-unchecked"} 
+            name="radio-button-unchecked" 
             size={24} 
-            color={selectedSubject === 'maths' ? "#006d37" : "#d1e4fb"} 
+            color="#bbcbbb" 
           />
         </Pressable>
 
@@ -104,7 +104,7 @@ export default function SubjectSelection() {
 
       <ChunkyButton 
         title="Ready to Learn! ➔" 
-        onPress={() => router.push('/quiz-selection')}
+        onPress={() => router.push(`/quiz-selection?subject=${selectedSubject}`)}
         style={styles.button}
       />
       

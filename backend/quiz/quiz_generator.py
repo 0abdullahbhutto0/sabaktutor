@@ -97,6 +97,150 @@ class Quiz:
             "book_id": self.book_id,
         }
 
+@dataclass
+class FlashcardItem:
+    title: str = ""
+    content: str = ""
+    type: str = "flashcard"
+    source_node_id: str = ""
+    id: str = ""
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:8]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "title": self.title,
+            "content": self.content,
+            "source_node_id": self.source_node_id,
+        }
+
+@dataclass
+class Lesson:
+    book_id: str = ""
+    title: str = ""
+    chapter_ids: List[str] = field(default_factory=list)
+    items: List[FlashcardItem] = field(default_factory=list)
+    id: str = ""
+    created_at: float = 0.0
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:12]
+        if not self.created_at:
+            import time
+            self.created_at = time.time()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "book_id": self.book_id,
+            "title": self.title,
+            "chapter_ids": self.chapter_ids,
+            "items": [item.to_dict() for item in self.items],
+            "created_at": self.created_at,
+        }
+
+@dataclass
+class TrueFalseItem:
+    statement: str = ""
+    is_true: bool = True
+    explanation: str = ""
+    type: str = "true_false"
+    source_node_id: str = ""
+    id: str = ""
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:8]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "statement": self.statement,
+            "is_true": self.is_true,
+            "explanation": self.explanation,
+            "source_node_id": self.source_node_id,
+        }
+
+@dataclass
+class FillInBlankItem:
+    sentence_before: str = ""
+    blank_answer: str = ""
+    sentence_after: str = ""
+    type: str = "fill_in_blank"
+    source_node_id: str = ""
+    id: str = ""
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:8]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "sentence_before": self.sentence_before,
+            "blank_answer": self.blank_answer,
+            "sentence_after": self.sentence_after,
+            "source_node_id": self.source_node_id,
+        }
+
+@dataclass
+class MCQCalculationItem:
+    problem: str = ""
+    options: List[str] = field(default_factory=list)
+    correct_index: int = 0
+    explanation: str = ""
+    type: str = "mcq_calculation"
+    source_node_id: str = ""
+    id: str = ""
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:8]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "problem": self.problem,
+            "options": self.options,
+            "correct_index": self.correct_index,
+            "explanation": self.explanation,
+            "source_node_id": self.source_node_id,
+        }
+
+@dataclass
+class InteractiveQuiz:
+    book_id: str = ""
+    title: str = ""
+    chapter_ids: List[str] = field(default_factory=list)
+    items: List[Any] = field(default_factory=list)
+    id: str = ""
+    created_at: float = 0.0
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:12]
+        if not self.created_at:
+            import time
+            self.created_at = time.time()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "book_id": self.book_id,
+            "title": self.title,
+            "chapter_ids": self.chapter_ids,
+            "items": [item.to_dict() for item in self.items],
+            "created_at": self.created_at,
+        }
+
 
 class QuizGenerator:
     """Generates MCQs with async streaming LLM support and balanced correct answers."""
@@ -200,7 +344,183 @@ class QuizGenerator:
 
         yield {"type": "done", "quiz": quiz}
 
-    
+    async def generate_lesson_streaming(
+        self,
+        document_tree,
+        chapter_id: str,
+        target_count: int = 10,
+        book_id: str = "",
+        title: Optional[str] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        nodes = self._get_chapter_nodes(document_tree, chapter_id)
+        selected_nodes = self._select_nodes(nodes, target_count)
+        if not selected_nodes:
+            yield {"type": "error", "message": "No content available"}
+            return
+
+        content_text = ""
+        for i, node in enumerate(selected_nodes, 1):
+            content_text += f"\n--- CONTENT {i} ---\n"
+            content_text += f"Title: {node['node_title']}\n"
+            content_text += f"Content: {node['content']}\n"
+
+        prompt = self.prompts.generate_lesson(
+            content_text=content_text,
+            total_items=target_count,
+            book_id=book_id,
+        )
+
+        if not self.llm:
+            yield {"type": "error", "message": "LLM not configured"}
+            return
+
+        full_response = []
+        async for token in self.llm.stream_complete(prompt, max_tokens=12000):
+            full_response.append(token)
+            yield {"type": "token", "token": token}
+
+        response_text = "".join(full_response)
+        items = self._parse_lesson_response(response_text, selected_nodes)
+        items = items[:target_count]
+        
+        lesson = Lesson(
+            book_id=book_id,
+            title=title or f"{chapter_id} - Lesson",
+            chapter_ids=[chapter_id],
+            items=items,
+        )
+
+        yield {"type": "done", "lesson": lesson}
+
+    async def generate_interactive_streaming(
+        self,
+        document_tree,
+        chapter_id: str,
+        target_count: int = 10,
+        book_id: str = "",
+        title: Optional[str] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        nodes = self._get_chapter_nodes(document_tree, chapter_id)
+        selected_nodes = self._select_nodes(nodes, target_count)
+        if not selected_nodes:
+            yield {"type": "error", "message": "No content available"}
+            return
+
+        content_text = ""
+        for i, node in enumerate(selected_nodes, 1):
+            content_text += f"\n--- CONTENT {i} ---\n"
+            content_text += f"Title: {node['node_title']}\n"
+            content_text += f"Content: {node['content']}\n"
+
+        prompt = self.prompts.generate_interactive_quiz(
+            content_text=content_text,
+            total_items=target_count,
+            book_id=book_id,
+        )
+
+        if not self.llm:
+            yield {"type": "error", "message": "LLM not configured"}
+            return
+
+        full_response = []
+        async for token in self.llm.stream_complete(prompt, max_tokens=12000):
+            full_response.append(token)
+            yield {"type": "token", "token": token}
+
+        response_text = "".join(full_response)
+        items = self._parse_interactive_response(response_text, selected_nodes)
+        items = items[:target_count]
+        
+        interactive_quiz = InteractiveQuiz(
+            book_id=book_id,
+            title=title or f"{chapter_id} - Interactive Quiz",
+            chapter_ids=[chapter_id],
+            items=items,
+        )
+
+        yield {"type": "done", "interactive_quiz": interactive_quiz}
+
+    def _parse_lesson_response(self, response: str, nodes: List[Dict]) -> List[FlashcardItem]:
+        try:
+            text = response.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+
+            data = json.loads(text.strip())
+            if not isinstance(data, list):
+                data = [data]
+
+            items = []
+            for item in data:
+                chunk_ref = item.get("chunk_ref", 1)
+                chunk_idx = min(chunk_ref - 1, len(nodes) - 1) if chunk_ref > 0 else 0
+                source_node_id = nodes[chunk_idx]["node_id"] if nodes else ""
+
+                items.append(FlashcardItem(
+                    title=item.get("title", ""),
+                    content=item.get("content", ""),
+                    source_node_id=source_node_id
+                ))
+            return items
+        except (json.JSONDecodeError, KeyError):
+            return []
+
+    def _parse_interactive_response(self, response: str, nodes: List[Dict]) -> List[Any]:
+        try:
+            text = response.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+
+            data = json.loads(text.strip())
+            if not isinstance(data, list):
+                data = [data]
+
+            items = []
+            for item in data:
+                chunk_ref = item.get("chunk_ref", 1)
+                chunk_idx = min(chunk_ref - 1, len(nodes) - 1) if chunk_ref > 0 else 0
+                source_node_id = nodes[chunk_idx]["node_id"] if nodes else ""
+                
+                item_type = item.get("type")
+                if item_type == "true_false":
+                    items.append(TrueFalseItem(
+                        statement=item.get("statement", ""),
+                        is_true=item.get("is_true", True),
+                        explanation=item.get("explanation", ""),
+                        source_node_id=source_node_id
+                    ))
+                elif item_type == "fill_in_blank":
+                    items.append(FillInBlankItem(
+                        sentence_before=item.get("sentence_before", ""),
+                        blank_answer=item.get("blank_answer", ""),
+                        sentence_after=item.get("sentence_after", ""),
+                        source_node_id=source_node_id
+                    ))
+                elif item_type == "mcq_calculation":
+                    items.append(MCQCalculationItem(
+                        problem=item.get("problem", ""),
+                        options=item.get("options", []),
+                        correct_index=item.get("correct_index", 0),
+                        explanation=item.get("explanation", ""),
+                        source_node_id=source_node_id
+                    ))
+                elif item_type == "mcq":
+                    items.append(MCQQuestion(
+                        stem=item.get("stem", ""),
+                        options=[MCQOption(text=o, is_correct=(i == item.get("correct_index", 0))) 
+                                 for i, o in enumerate(item.get("options", []))],
+                        source_node_id=source_node_id,
+                        difficulty=Difficulty(item.get("difficulty", "medium")),
+                        topic=item.get("topic", "general")
+                    ))
+            return items
+        except (json.JSONDecodeError, KeyError):
+            return []
+
     def _get_chapter_nodes(self, document_tree, chapter_id: str) -> List[Any]:
         """Get all nodes that belong to a specific chapter."""
         nodes = document_tree.get_chapter_nodes(chapter_id)

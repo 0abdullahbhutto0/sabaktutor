@@ -35,20 +35,12 @@ def get_firestore_db():
     _db = firestore.client()
     return _db
 
-def save_quiz_to_firestore(quiz_id: str, quiz_data: dict, user_id: str = None):
+def save_quiz_to_firestore(quiz_id: str, quiz_data: dict, user_id: str = None, collection_name: str = 'quizzes'):
     """
-    Saves a generated quiz to Firestore.
-    Since quizzes are dynamic per user, we store them in users/{user_id}/quizzes/{quiz_id}
-    Wait, the user said dynamic per user. So we should store them in a user-specific subcollection
-    or we can store them in `quizzes` collection with the user_id attached.
-    Let's store them in the global `quizzes` collection with a unique ID per user and chapter, e.g., quiz_{user_id}_{chapter_id}
+    Saves a generated quiz or lesson to Firestore.
     """
     db = get_firestore_db()
     
-    # If it's user-specific, the quiz_id should ideally be unique per user.
-    # The frontend will query `quizzes` where `levelId == chapter_id` and `userId == user_id`.
-    # To keep things simple and secure, we'll store it as `quizzes/{quiz_id}` where quiz_id = f"quiz_{user_id}_{level_id}"
-    
-    doc_ref = db.collection('quizzes').document(quiz_id)
+    doc_ref = db.collection(collection_name).document(quiz_id)
     doc_ref.set(quiz_data)
-    print(f"Quiz {quiz_id} saved to Firestore successfully.")
+    print(f"Quiz {quiz_id} saved to Firestore successfully in {collection_name}.")

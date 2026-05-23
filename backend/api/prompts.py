@@ -188,3 +188,80 @@ Provide a brief educational explanation (2-3 sentences) focusing on the key conc
 {content}
 
 Focus on key points. Be clear and accurate."""
+
+    @staticmethod
+    def generate_lesson(content_text: str, total_items: int, book_id: str) -> str:
+        """Generate a lesson extracting formulas, definitions, concepts as flashcards."""
+        return f"""You are a Sindh Board expert creating a micro-lesson from the textbook.
+
+SOURCE CONTENT:
+Book: {book_id}
+
+{content_text}
+
+RULES:
+1. Extract exactly {total_items} key learning items (formulas, definitions, or important concepts).
+2. Format them as flashcards.
+3. Every item must trace directly to the SOURCE CONTENT.
+
+Return ONLY a JSON array:
+
+[
+  {{
+    "type": "flashcard",
+    "title": "Concept Name or Formula Name",
+    "content": "Definition, formula, or explanation"
+  }}
+]"""
+
+    @staticmethod
+    def generate_interactive_quiz(content_text: str, total_items: int, book_id: str) -> str:
+        """Generate an interactive quiz with a mix of true_false, fill_in_blank, and mcq_calculation items."""
+        return f"""You are a Sindh Board examiner creating an interactive quiz from the textbook.
+
+SOURCE CONTENT:
+Book: {book_id}
+
+{content_text}
+
+RULES:
+1. Generate exactly {total_items} interactive quiz items.
+2. Mix the following types: true_false, fill_in_blank, mcq, and (if applicable) mcq_calculation.
+3. Every item must trace directly to the SOURCE CONTENT.
+
+Return ONLY a JSON array containing polymorphic objects based on their type:
+
+For True/False:
+{{
+  "type": "true_false",
+  "statement": "The statement to evaluate",
+  "is_true": true,
+  "explanation": "Why it is true or false"
+}}
+
+For Fill in the Blank:
+{{
+  "type": "fill_in_blank",
+  "sentence_before": "The beginning of the sentence ",
+  "blank_answer": "the missing word",
+  "sentence_after": " the rest of the sentence."
+}}
+
+For MCQ Calculation:
+{{
+  "type": "mcq_calculation",
+  "problem": "The calculation question",
+  "options": ["A", "B", "C", "D"],
+  "correct_index": 0,
+  "explanation": "Step by step solution"
+}}
+
+For Standard MCQ:
+{{
+  "type": "mcq",
+  "stem": "The question text",
+  "options": ["A", "B", "C", "D"],
+  "correct_index": 0
+}}
+
+Generate the JSON array now."""

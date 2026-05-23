@@ -1,12 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import ChunkyButton from './components/ChunkyButton';
 
 export default function Profile() {
   const router = useRouter();
+  const { subject } = useLocalSearchParams<{ subject?: string }>();
+  const subjectStr = subject || 'physics';
   const user = auth().currentUser;
 
   const handleLogout = async () => {
@@ -42,7 +44,7 @@ export default function Profile() {
 
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/quiz-selection')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/quiz-selection', params: { subject: subjectStr } })}>
           <MaterialCommunityIcons name="map-marker-path" size={28} color="#bbcbbb" />
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Map</Text>
         </TouchableOpacity>

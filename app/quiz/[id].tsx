@@ -1,21 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform, ActivityIndicator, TextInput, ScrollView } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import ChunkyButton from '../components/ChunkyButton';
+import { CHAPTER_TITLES, generateQuizAsync, BOOK_CHAPTERS } from '../services/quizService';
 
 export default function QuizScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, subject } = useLocalSearchParams();
   const quizId = typeof id === 'string' ? id : 'ch1';
+  const subjectStr = typeof subject === 'string' ? subject : 'physics';
+  const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [questions, setQuestions] = useState<any[]>([]);
+  const chapterName = CHAPTER_TITLES[subjectStr]?.[quizId] || `Chapter ${quizId.replace('ch', '')}`;
+  const [quizTitle, setQuizTitle] = useState(chapterName);
   const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationFailed, setGenerationFailed] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
+  const [hearts, setHearts] = useState(3);
   const [showResults, setShowResults] = useState(false);
+  
+  // For standard MCQs and True/False
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+
+  // For Fill in the blank
+  const [fillBlankText, setFillBlankText] = useState("");
+  const [isFillBlankChecked, setIsFillBlankChecked] = useState(false);
+  const [fillBlankCorrect, setFillBlankCorrect] = useState(false);
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -23,12 +38,29 @@ export default function QuizScreen() {
         const user = auth().currentUser;
         if (!user) return;
         
-        const quizDocId = `quiz_${user.uid}_${quizId}`;
+        // Changed to quiz_{uid}_{book}_{level}
+        const quizDocId = `quiz_${user.uid}_${book}_${quizId}`;
         const doc = await firestore().collection('quizzes').doc(quizDocId).get();
-        if (doc.exists) {
+        if (doc.data()) {
           const data = doc.data();
-          if (data && data.questions) {
-            setQuestions(data.questions);
+          if (data && data.items && data.items.length > 0) {
+            setQuestions(data.items);
+          } else {
+            setGenerationFailed(true);
+          }
+        } else {
+          // Fallback to old format just in case
+          const oldDocId = `quiz_${user.uid}_${quizId}`;
+          const oldDoc = await firestore().collection('quizzes').doc(oldDocId).get();
+          if (oldDoc.data()) {
+             const data = oldDoc.data();
+             if (data && data.items && data.items.length > 0) {
+               setQuestions(data.items);
+             } else {
+               setGenerationFailed(true);
+             }
+          } else {
+             setIsGenerating(true);
           }
         }
       } catch (e) {
@@ -40,61 +72,106 @@ export default function QuizScreen() {
     fetchQuiz();
   }, [quizId]);
 
-  const handleOptionSelect = (index: number) => {
-    if (selectedOptionIndex !== null) return; // Prevent multiple selections
-    setSelectedOptionIndex(index);
-    
-    const currentQuestion = questions[currentQuestionIndex];
-    if (index === currentQuestion.correct_index) {
-      setScore(score + 1);
+  const saveProgress = async (finalScore: number, passed: boolean) => {
+    try {
+      const user = auth().currentUser;
+      if (user) {
+        await firestore()
+          .collection('users')
+          .doc(user.uid)
+          .collection('progress')
+          .doc(`quiz_${user.uid}_${book}_${quizId}`)
+          .set({
+            completed: true,
+            score: finalScore,
+            total: questions.length,
+            passed: passed,
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+      }
+    } catch (e) {
+      console.error("Failed to save progress:", e);
     }
+  };
 
-    // Wait a brief moment before moving to the next question
+  const nextQuestion = (wasCorrect: boolean) => {
+    let newScore = score + (wasCorrect ? 1 : 0);
+    let newHearts = hearts - (wasCorrect ? 0 : 1);
+    
+    if (wasCorrect) setScore(newScore);
+    else setHearts(newHearts);
+
     setTimeout(async () => {
+      if (newHearts <= 0) {
+        setShowResults(true);
+        await saveProgress(newScore, false);
+        return;
+      }
+
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex(currentQuestionIndex + 1);
         setSelectedOptionIndex(null);
+        setFillBlankText("");
+        setIsFillBlankChecked(false);
       } else {
         setShowResults(true);
-        // Save progress if they passed
-        const finalScore = score + (index === currentQuestion.correct_index ? 1 : 0);
-        const percent = finalScore / questions.length;
-        if (percent >= 0.6) {
-          try {
-            const user = auth().currentUser;
-            if (user) {
-              await firestore()
-                .collection('users')
-                .doc(user.uid)
-                .collection('progress')
-                .doc(quizId)
-                .set({
-                  completed: true,
-                  score: finalScore,
-                  total: questions.length,
-                  passed: true,
-                  updatedAt: firestore.FieldValue.serverTimestamp(),
-                }, { merge: true });
-            }
-          } catch (e) {
-            console.error("Failed to save progress:", e);
-          }
-        }
+        const passed = (newScore / questions.length) >= 0.6;
+        await saveProgress(newScore, passed);
       }
-    }, 1000);
+    }, 1200);
+  };
+
+  const handleOptionSelect = (index: number) => {
+    if (selectedOptionIndex !== null) return; 
+    setSelectedOptionIndex(index);
+    const currentQuestion = questions[currentQuestionIndex];
+    const qType = currentQuestion.type || 'mcq';
+    
+    let correctIdx = currentQuestion.correct_index || 0;
+    if (qType === 'true_false') {
+      correctIdx = currentQuestion.is_true ? 0 : 1;
+    }
+    
+    const isCorrect = index === correctIdx;
+    nextQuestion(isCorrect);
+  };
+
+  const handleCheckFillBlank = () => {
+    if (isFillBlankChecked) return;
+    setIsFillBlankChecked(true);
+    const currentQuestion = questions[currentQuestionIndex];
+    const correctAnswers: string[] = currentQuestion.correct_answers || [];
+    const isCorrect = correctAnswers.some(ans => ans.toLowerCase() === fillBlankText.trim().toLowerCase());
+    
+    let fallbackCorrect = false;
+    if (currentQuestion.correct_answer && typeof currentQuestion.correct_answer === 'string') {
+      fallbackCorrect = currentQuestion.correct_answer.toLowerCase() === fillBlankText.trim().toLowerCase();
+    }
+    
+    let blankCorrect = false;
+    if (currentQuestion.blank_answer) {
+      blankCorrect = currentQuestion.blank_answer.toLowerCase() === fillBlankText.trim().toLowerCase();
+    }
+    
+    const finalCorrect = isCorrect || fallbackCorrect || blankCorrect;
+    setFillBlankCorrect(finalCorrect);
+    nextQuestion(finalCorrect);
   };
 
   const getOptionStyle = (index: number) => {
     if (selectedOptionIndex === null) return styles.optionButton;
-    
     const currentQuestion = questions[currentQuestionIndex];
-    if (index === currentQuestion.correct_index) {
+    const qType = currentQuestion.type || 'mcq';
+    let correctIdx = currentQuestion.correct_index || 0;
+    if (qType === 'true_false') correctIdx = currentQuestion.is_true ? 0 : 1;
+    
+    if (index === correctIdx) {
       return [styles.optionButton, styles.optionCorrect];
     }
     if (index === selectedOptionIndex) {
       return [styles.optionButton, styles.optionIncorrect];
     }
-    return styles.optionButton;
+    return [styles.optionButton, { opacity: 0.5 }];
   };
 
   if (loading) {
@@ -108,19 +185,56 @@ export default function QuizScreen() {
     );
   }
 
-  if (questions.length === 0) {
+  if (isGenerating && !generationFailed && questions.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="hourglass-empty" size={80} color="#94A3B8" />
           <Text style={styles.resultsTitle}>Quiz Generating</Text>
           <Text style={[styles.resultsScore, { textAlign: 'center' }]}>Your tailored quiz is being prepared by AI. Please check back in a few seconds.</Text>
-          
           <ChunkyButton 
             title="Back to Map" 
-            onPress={() => router.replace('/quiz-selection')}
+            onPress={() => router.back()}
             style={styles.primaryButton}
-            textStyle={styles.primaryButtonText}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (generationFailed || questions.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <MaterialIcons name="error-outline" size={80} color="#EF4444" />
+          <Text style={styles.resultsTitle}>Generation Failed</Text>
+          <Text style={[styles.resultsScore, { textAlign: 'center' }]}>
+            The AI was unable to generate a valid quiz for this chapter.
+          </Text>
+          <ChunkyButton 
+            title="Regenerate Quiz" 
+            onPress={async () => {
+              try {
+                setLoading(true);
+                const user = auth().currentUser;
+                if (user) {
+                  const quizDocId = `quiz_${user.uid}_${book}_${quizId}`;
+                  await firestore().collection('quizzes').doc(quizDocId).delete();
+                  
+                  const chapterId = BOOK_CHAPTERS[subjectStr]?.[quizId];
+                  if (chapterId) {
+                    await generateQuizAsync(chapterId, quizId, book);
+                  }
+                }
+              } catch(e) {}
+              router.back();
+            }}
+            style={styles.primaryButton}
+          />
+          <ChunkyButton 
+            title="Back to Map" 
+            onPress={() => router.back()}
+            style={[styles.primaryButton, { marginTop: 12, backgroundColor: '#64748B' }]}
           />
         </View>
       </SafeAreaView>
@@ -128,19 +242,18 @@ export default function QuizScreen() {
   }
 
   if (showResults) {
+    const passed = hearts > 0 && (score / questions.length) >= 0.6;
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
           <View style={styles.resultsCard}>
-            <MaterialIcons name="emoji-events" size={80} color="#FFD700" />
-            <Text style={styles.resultsTitle}>Quiz Completed!</Text>
+            <MaterialIcons name={passed ? "emoji-events" : "sentiment-dissatisfied"} size={80} color={passed ? "#FFD700" : "#EF4444"} />
+            <Text style={styles.resultsTitle}>{passed ? "Quiz Completed!" : "Out of Hearts!"}</Text>
             <Text style={styles.resultsScore}>You scored {score} out of {questions.length}</Text>
-            
             <ChunkyButton 
               title="Back to Map" 
-              onPress={() => router.replace('/quiz-selection')}
+              onPress={() => router.back()}
               style={styles.primaryButton}
-              textStyle={styles.primaryButtonText}
             />
           </View>
         </View>
@@ -149,54 +262,113 @@ export default function QuizScreen() {
   }
 
   const currentQuestion = questions[currentQuestionIndex];
+  const qType = currentQuestion.type || 'mcq';
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+          <MaterialIcons name="close" size={24} color="#94A3B8" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chapter Quiz</Text>
-        <View style={{ width: 24 }} /> {/* Spacer for alignment */}
+        <Text style={styles.headerTitle}>{quizTitle}</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <View style={styles.container}>
-        <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>Question {currentQuestionIndex + 1} of {questions.length}</Text>
-          <View style={styles.progressBarBg}>
-            <View 
-              style={[
-                styles.progressBarFill, 
-                { width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }
-              ]} 
-            />
-          </View>
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBarBg}>
+          <View 
+            style={[
+              styles.progressBarFill, 
+              { width: `${((currentQuestionIndex) / questions.length) * 100}%` }
+            ]} 
+          />
         </View>
 
-        <View style={styles.questionCard}>
-          <Text style={styles.questionText}>{currentQuestion.stem}</Text>
-        </View>
-
-        <View style={styles.optionsContainer}>
-          {currentQuestion.options.map((option: any, index: number) => (
-            <TouchableOpacity
-              key={index}
-              style={getOptionStyle(index)}
-              onPress={() => handleOptionSelect(index)}
-              activeOpacity={0.7}
-              disabled={selectedOptionIndex !== null}
-            >
-              <Text style={[
-                styles.optionText,
-                selectedOptionIndex !== null && index === currentQuestion.correct_index && styles.optionTextCorrect,
-                selectedOptionIndex === index && index !== currentQuestion.correct_index && styles.optionTextIncorrect
-              ]}>
-                {option.text}
-              </Text>
-            </TouchableOpacity>
+        <View style={styles.heartsContainer}>
+          {[1, 2, 3].map(h => (
+            <MaterialIcons key={h} name={h <= hearts ? "favorite" : "favorite-border"} size={24} color="#EF4444" style={{marginLeft: 4}} />
           ))}
         </View>
       </View>
+
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        
+        <View style={styles.questionCard}>
+          <Text style={styles.questionText}>
+            {qType === 'true_false' ? currentQuestion.statement : 
+             qType === 'fill_in_blank' ? `${currentQuestion.sentence_before} _________ ${currentQuestion.sentence_after}` :
+             qType === 'mcq_calculation' ? currentQuestion.problem :
+             (currentQuestion.stem || currentQuestion.question)}
+          </Text>
+        </View>
+
+        {(qType === 'mcq' || qType === 'true_false' || qType === 'mcq_calculation') && (
+          <View style={styles.optionsContainer}>
+            {(qType === 'true_false' ? [{text: 'True'}, {text: 'False'}] : (currentQuestion.options || [])).map((option: any, index: number) => {
+              const optText = typeof option === 'string' ? option : option.text;
+              
+              let correctIdx = currentQuestion.correct_index || 0;
+              if (qType === 'true_false') correctIdx = currentQuestion.is_true ? 0 : 1;
+
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={getOptionStyle(index)}
+                  onPress={() => handleOptionSelect(index)}
+                  activeOpacity={0.7}
+                  disabled={selectedOptionIndex !== null}
+                >
+                  <Text style={[
+                    styles.optionText,
+                    selectedOptionIndex !== null && index === correctIdx && styles.optionTextCorrect,
+                    selectedOptionIndex === index && index !== correctIdx && styles.optionTextIncorrect
+                  ]}>
+                    {optText}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
+
+        {qType === 'fill_in_blank' && (
+          <View style={styles.optionsContainer}>
+            <TextInput
+              style={[
+                styles.textInput,
+                isFillBlankChecked && fillBlankCorrect && styles.optionCorrect,
+                isFillBlankChecked && !fillBlankCorrect && styles.optionIncorrect
+              ]}
+              placeholder="Type your answer here..."
+              placeholderTextColor="#64748B"
+              value={fillBlankText}
+              onChangeText={setFillBlankText}
+              editable={!isFillBlankChecked}
+              autoCapitalize="none"
+            />
+            {!isFillBlankChecked && (
+              <ChunkyButton 
+                title="Check" 
+                onPress={handleCheckFillBlank}
+                style={{ marginTop: 16 }}
+                disabled={!fillBlankText.trim()}
+              />
+            )}
+            {isFillBlankChecked && (
+              <Text style={{
+                color: fillBlankCorrect ? '#4ADE80' : '#F87171',
+                fontSize: 18,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                marginTop: 16
+              }}>
+                {fillBlankCorrect ? "Correct!" : `Incorrect. The answer was: ${currentQuestion.blank_answer || currentQuestion.correct_answer || (currentQuestion.correct_answers || [])[0]}`}
+              </Text>
+            )}
+          </View>
+        )}
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -204,7 +376,7 @@ export default function QuizScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A', // Slate 900
+    backgroundColor: '#0F172A',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
@@ -213,40 +385,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    color: '#E2E8F0',
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFF',
-  },
-  container: {
     flex: 1,
-    padding: 20,
+    textAlign: 'center',
   },
   progressContainer: {
-    marginBottom: 20,
-  },
-  progressText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '600',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 15,
   },
   progressBarBg: {
-    height: 8,
+    flex: 1,
+    height: 12,
     backgroundColor: '#1E293B',
-    borderRadius: 4,
+    borderRadius: 6,
+    marginHorizontal: 16,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#3B82F6', // Blue 500
-    borderRadius: 4,
+    backgroundColor: '#4ADE80',
+    borderRadius: 6,
+  },
+  heartsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  container: {
+    flexGrow: 1,
+    padding: 20,
   },
   questionCard: {
     backgroundColor: '#1E293B',
@@ -281,11 +457,11 @@ const styles = StyleSheet.create({
   },
   optionCorrect: {
     backgroundColor: 'rgba(34, 197, 94, 0.2)',
-    borderColor: '#22C55E', // Green 500
+    borderColor: '#22C55E',
   },
   optionIncorrect: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    borderColor: '#EF4444', // Red 500
+    borderColor: '#EF4444',
   },
   optionText: {
     color: '#E2E8F0',
@@ -297,6 +473,15 @@ const styles = StyleSheet.create({
   },
   optionTextIncorrect: {
     color: '#F87171',
+  },
+  textInput: {
+    backgroundColor: '#1E293B',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#334155',
+    color: '#FFF',
+    fontSize: 18,
   },
   resultsCard: {
     flex: 1,
@@ -318,21 +503,6 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
     width: '100%',
-    alignItems: 'center',
-    // Chunky shadow
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 4,
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
 });
