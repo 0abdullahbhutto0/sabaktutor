@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.schemas import (
     AskRequest,
+    SummarizeRequest,
     QuizGenerateRequest,
     QuizBackgroundGenerateRequest,
 )
@@ -106,7 +107,7 @@ async def ask_stream(req: AskRequest, services: Services = Depends(get_services)
         raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
 
     async def token_generator() -> AsyncGenerator[str, None]:
-        async for token in services.ask_stream(req.query, max_results=10):
+        async for token in services.ask_stream(req.query, req.history, req.previous_summary, max_results=10):
             yield sse_stream("token", {"token": token})
         yield sse_stream("done", {"status": "complete"})
 
@@ -119,6 +120,14 @@ async def ask_stream(req: AskRequest, services: Services = Depends(get_services)
             "X-Accel-Buffering": "no",
         },
     )
+
+@app.post("/ask/summarize")
+async def ask_summarize(req: SummarizeRequest, services: Services = Depends(get_services)):
+    """
+    Compress a chat history into a dense summary.
+    """
+    summary = await services.summarize_history(req.history)
+    return {"summary": summary}
 
 @app.post("/quiz/generate/stream")
 async def generate_quiz_stream(

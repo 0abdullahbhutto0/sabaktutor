@@ -175,6 +175,15 @@ export default function MasteryMap() {
         </View>
       </ScrollView>
 
+      {/* Floating Action Button for Study Buddy Chat */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => router.push(`/chat?subject=${subjectStr}` as any)}
+        activeOpacity={0.8}
+      >
+        <MaterialIcons name="smart-toy" size={28} color="#FFF" />
+      </TouchableOpacity>
+
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
@@ -382,5 +391,23 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
     color: '#6f5900',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 96,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: '#60A5FA',
   },
 });

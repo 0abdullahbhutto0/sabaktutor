@@ -95,11 +95,11 @@ class Services:
         response = self._active_engine.search(query, options)
         return response.results
 
-    async def ask_stream(self, query: str, max_results: int = 10) -> AsyncGenerator[str, None]:
+    async def ask_stream(self, query: str, history: list = None, previous_summary: str = None, max_results: int = 10) -> AsyncGenerator[str, None]:
         """Async streaming ask with custom prompts."""
         results = self.search(query, max_results)
         if not results:
-            yield "No relevant content found."
+            yield "No relevant content found in the textbook."
             return
 
         context = "\n\n".join(
@@ -119,8 +119,26 @@ class Services:
             return
 
         system_msg = self._prompts.teacher_system(book_title)
-        async for token in self.llm.stream_complete(prompt, system=system_msg):
+        if previous_summary:
+            system_msg += f"\n\nPREVIOUS CONVERSATION SUMMARY:\n{previous_summary}"
+            
+        async for token in self.llm.stream_complete(prompt, system=system_msg, history=history):
             yield token
+
+    async def summarize_history(self, history: list) -> str:
+        """Compress a chat history into a dense summary to save context tokens."""
+        if self.llm is None or not history:
+            return ""
+            
+        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history])
+        prompt = self._prompts.generate_summary(history_text, max_sentences=3)
+        system_msg = "You are a highly capable AI that compresses chat logs into extremely dense, informative summaries."
+        
+        tokens = []
+        async for token in self.llm.stream_complete(prompt, system=system_msg):
+            tokens.append(token)
+            
+        return "".join(tokens)
 
     def generate_quiz(self, chapter_id: str):
         if self._active_tree is None:
