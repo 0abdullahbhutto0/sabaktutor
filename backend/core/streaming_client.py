@@ -28,11 +28,14 @@ class StreamingLLMClient:
         system: str = "",
         temperature: float = 0.7,
         max_tokens: int = 16000,
+        history: list = None,
     ) -> AsyncGenerator[str, None]:
         """Stream completion from OpenRouter."""
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": prompt})
 
         try:

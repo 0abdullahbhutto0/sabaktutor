@@ -38,7 +38,7 @@ export default function Signup() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0} style={styles.container}>
       <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.header}>SabakTutor</Text>
       <Text style={styles.title}>Create your Profile</Text>

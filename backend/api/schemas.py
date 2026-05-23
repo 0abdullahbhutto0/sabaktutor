@@ -8,9 +8,16 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+from typing import List, Optional, Dict
+
 class AskRequest(BaseModel):
     book_id: str
     query: str
+    history: Optional[List[Dict[str, str]]] = None
+    previous_summary: Optional[str] = None
+
+class SummarizeRequest(BaseModel):
+    history: List[Dict[str, str]]
 
 
 class UnitChapter(BaseModel):
