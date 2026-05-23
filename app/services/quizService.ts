@@ -6,72 +6,120 @@ import firestore from "@react-native-firebase/firestore";
 //const BACKEND_URL = 'http://10.0.2.2:8000'; // Adjust if testing on physical device
 
 const BACKEND_URL = "http://192.168.1.104:8000";
-export const generateQuizAsync = async (chapterId: string, levelId: string) => {
+export const generateQuizAsync = async (chapterId: string, levelId: string, bookId: string) => {
   const currentUser = auth().currentUser;
   if (!currentUser) return;
 
   const userId = currentUser.uid;
-  const quizId = `quiz_${userId}_${levelId}`;
+  const lessonId = `lesson_${userId}_${bookId}_${levelId}`;
+  const quizId = `quiz_${userId}_${bookId}_${levelId}`;
 
   try {
-    // 1. Check if quiz already exists in Firestore and is valid
+    // 1. Check if lesson exists
+    const lessonDoc = await firestore().collection("lessons").doc(lessonId).get();
+    if (!lessonDoc.data()) {
+      console.log(`Requesting generation for lesson ${lessonId}...`);
+      const response = await fetch(`${BACKEND_URL}/quiz/generate/lesson/background`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          book_id: bookId,
+          quiz_type: "chapter",
+          chapter_id: chapterId,
+          user_id: userId,
+          level_id: levelId,
+          target_count: 5,
+        }),
+      });
+      if (!response.ok) {
+        console.error(`Failed to trigger lesson generation for ${levelId}: ${response.statusText}`);
+      }
+    }
+
+    // 2. Check if quiz exists
     const quizDoc = await firestore().collection("quizzes").doc(quizId).get();
     const data = quizDoc.data();
-    if (quizDoc.exists && data && data.questions && data.questions.length > 0) {
-      console.log(`Quiz ${quizId} already exists. Skipping generation.`);
-      return; // Already generated
-    }
-
-    console.log(`Requesting generation for ${quizId}...`);
-    // 2. Ping backend to generate it in the background
-    const response = await fetch(`${BACKEND_URL}/quiz/generate/background`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        book_id: "cs_9", // Hardcoded for MVP
-        quiz_type: "chapter",
-        chapter_id: chapterId, // The exact ID expected by the backend
-        user_id: userId,
-        level_id: levelId, // App's node ID (e.g. 'ch1')
-        target_count: 10,
-        duration_minutes: 15,
-        passing_percent: 60,
-      }),
-    });
-
-    if (!response.ok) {
-      console.error(
-        `Failed to trigger generation for ${levelId}: ${response.statusText}`,
-      );
+    if (!data) {
+      console.log(`Requesting generation for quiz ${quizId}...`);
+      const response = await fetch(`${BACKEND_URL}/quiz/generate/interactive/background`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          book_id: bookId,
+          quiz_type: "chapter",
+          chapter_id: chapterId,
+          user_id: userId,
+          level_id: levelId,
+          target_count: 10,
+          duration_minutes: 15,
+          passing_percent: 60,
+        }),
+      });
+      if (!response.ok) {
+        console.error(`Failed to trigger interactive generation for ${levelId}: ${response.statusText}`);
+      }
     } else {
-      console.log(`Generation triggered for ${levelId}`);
+      console.log(`Quiz ${quizId} already exists. Skipping generation.`);
     }
   } catch (error) {
-    console.error("Error generating quiz:", error);
+    console.error("Error generating chapter content:", error);
   }
 };
 
-// Map of UI level IDs to actual book chapter IDs in the RAG JSON
-export const LEVEL_TO_CHAPTER: Record<string, string> = {
-  'ch1': '0003',
-  'ch2': '0014',
-  'ch3': '0019',
-  'ch4': '0024',
-  'ch5': '0035',
+export const BOOK_CHAPTERS: Record<string, Record<string, string>> = {
+  computer: {
+    'ch1': '0003',
+    'ch2': '0014',
+    'ch3': '0019',
+    'ch4': '0024',
+    'ch5': '0035',
+  },
+  physics: {
+    'ch1': '0004',
+    'ch2': '0036',
+    'ch3': '0050',
+    'ch4': '0061',
+    'ch5': '0075',
+    'ch6': '0090',
+    'ch7': '0099',
+    'ch8': '0105',
+    'ch9': '0113',
+  }
 };
 
-export const preloadNextQuizzes = async (currentLevelIndex: number = 0) => {
-  const levels = ['ch1', 'ch2', 'ch3', 'ch4', 'ch5'];
+export const CHAPTER_TITLES: Record<string, Record<string, string>> = {
+  computer: {
+    'ch1': 'Fundamentals of Computer',
+    'ch2': 'Fundamentals of Operating System',
+    'ch3': 'Office Automation',
+    'ch4': 'Data Communication and Computer Networks',
+    'ch5': 'Computer Security and Ethics',
+  },
+  physics: {
+    'ch1': 'Physical Quantities and Measurement',
+    'ch2': 'Kinematics',
+    'ch3': 'Dynamics',
+    'ch4': 'Turning Effect of Forces',
+    'ch5': 'Gravitation',
+    'ch6': 'Work and Energy',
+    'ch7': 'Properties of Matter',
+    'ch8': 'Thermal Properties of Matter',
+    'ch9': 'Transfer of Heat',
+  }
+};
+
+export const preloadNextQuizzes = async (currentLevelIndex: number = 0, subject: string = 'physics') => {
+  const chaptersMap = BOOK_CHAPTERS[subject] || BOOK_CHAPTERS['physics'];
+  const levels = Object.keys(chaptersMap).sort();
   
   const levelsToGenerate = levels.slice(currentLevelIndex, currentLevelIndex + 5);
+  const bookId = subject === 'physics' ? 'phy_9' : 'cs_9';
   
   for (const levelId of levelsToGenerate) {
-    const chapterId = LEVEL_TO_CHAPTER[levelId];
+    const chapterId = chaptersMap[levelId];
     if (chapterId) {
       // Await sequentially to avoid overwhelming the backend and OpenRouter API
-      await generateQuizAsync(chapterId, levelId);
+      await generateQuizAsync(chapterId, levelId, bookId);
       // Small delay between requests to prevent connection drops
       await new Promise(resolve => setTimeout(resolve, 500));
     }

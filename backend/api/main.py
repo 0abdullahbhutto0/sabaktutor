@@ -173,44 +173,71 @@ async def generate_quiz_stream(
         },
     )
 
-async def background_quiz_generator(req: QuizBackgroundGenerateRequest, services: Services):
-    print(f"--- STARTING BACKGROUND GEN FOR {req.level_id} ---", flush=True)
+async def background_lesson_generator(req: QuizBackgroundGenerateRequest, services: Services):
+    print(f"--- STARTING BACKGROUND LESSON GEN FOR {req.level_id} ---", flush=True)
     try:
         services.load_book(req.book_id)
-        print(f"--- BOOK LOADED FOR {req.level_id} ---", flush=True)
-        async for event in services.quiz_generator.generate_quiz_streaming(
+        async for event in services.quiz_generator.generate_lesson_streaming(
             document_tree=services._active_tree,
-            quiz_type=req.quiz_type,
-            chapter_id=req.chapter_id,
-            unit_chapters=[{"id": c.id, "name": c.name} for c in (req.unit_chapters or [])],
+            chapter_id=req.chapter_id or "",
             target_count=req.target_count,
-            duration_minutes=req.duration_minutes,
-            passing_percent=req.passing_percent,
             book_id=req.book_id,
             title=req.title,
         ):
-            print(f"--- EVENT {event['type']} for {req.level_id} ---", flush=True)
             if event["type"] == "done":
-                quiz = event["quiz"]
-                quiz_data = quiz.to_dict()
-                quiz_id = f"quiz_{req.user_id}_{req.level_id}"
-                await asyncio.to_thread(save_quiz_to_firestore, quiz_id, quiz_data, req.user_id)
-                print(f"Background quiz generation for {quiz_id} complete.", flush=True)
+                lesson = event["lesson"]
+                lesson_data = lesson.to_dict()
+                lesson_id = f"lesson_{req.user_id}_{req.book_id}_{req.level_id}"
+                await asyncio.to_thread(save_quiz_to_firestore, lesson_id, lesson_data, req.user_id, 'lessons')
+                print(f"Background lesson generation for {lesson_id} complete.", flush=True)
     except Exception as e:
-        print(f"Background quiz generation failed: {e}", flush=True)
+        print(f"Background lesson generation failed: {e}", flush=True)
 
-@app.post("/quiz/generate/background")
-async def generate_quiz_background(
+@app.post("/quiz/generate/lesson/background")
+async def generate_lesson_background(
     req: QuizBackgroundGenerateRequest,
     background_tasks: BackgroundTasks,
     services: Services = Depends(get_services),
 ):
     """
-    Generate a quiz in the background and save to Firestore.
+    Generate a lesson in the background and save to Firestore.
     Returns 202 Accepted immediately.
     """
-    background_tasks.add_task(background_quiz_generator, req, services)
-    return {"status": "accepted", "message": "Quiz generation started in background"}
+    background_tasks.add_task(background_lesson_generator, req, services)
+    return {"status": "accepted", "message": "Lesson generation started in background"}
+
+async def background_interactive_generator(req: QuizBackgroundGenerateRequest, services: Services):
+    print(f"--- STARTING BACKGROUND INTERACTIVE QUIZ GEN FOR {req.level_id} ---", flush=True)
+    try:
+        services.load_book(req.book_id)
+        async for event in services.quiz_generator.generate_interactive_streaming(
+            document_tree=services._active_tree,
+            chapter_id=req.chapter_id or "",
+            target_count=req.target_count,
+            book_id=req.book_id,
+            title=req.title,
+        ):
+            if event["type"] == "done":
+                quiz = event["interactive_quiz"]
+                quiz_data = quiz.to_dict()
+                quiz_id = f"quiz_{req.user_id}_{req.book_id}_{req.level_id}"
+                await asyncio.to_thread(save_quiz_to_firestore, quiz_id, quiz_data, req.user_id)
+                print(f"Background interactive quiz generation for {quiz_id} complete.", flush=True)
+    except Exception as e:
+        print(f"Background interactive quiz generation failed: {e}", flush=True)
+
+@app.post("/quiz/generate/interactive/background")
+async def generate_interactive_background(
+    req: QuizBackgroundGenerateRequest,
+    background_tasks: BackgroundTasks,
+    services: Services = Depends(get_services),
+):
+    """
+    Generate an interactive quiz in the background and save to Firestore.
+    Returns 202 Accepted immediately.
+    """
+    background_tasks.add_task(background_interactive_generator, req, services)
+    return {"status": "accepted", "message": "Interactive quiz generation started in background"}
 
 
 @app.get("/health")
