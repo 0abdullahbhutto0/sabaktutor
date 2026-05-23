@@ -1,50 +1,96 @@
-# Welcome to your Expo app 👋
+<div align="center">
+  <img src="assets/images/sabaktutor-logo.png" alt="SabakTutor Logo" width="150" />
+  <h1>SabakTutor MVP</h1>
+  <p>An intelligent, logic-first learning platform for students, powered by RAG and dynamic LLM quiz generation.</p>
+</div>
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+---
 
-## Get started
+## 🏗 Architecture Overview
 
-1. Install dependencies
+SabakTutor is built with a modern stack consisting of a **React Native (Expo)** frontend, a **FastAPI (Python)** backend, and **Google Firebase** for real-time data and authentication. 
 
-   ```bash
-   npm install
-   ```
+The core feature of SabakTutor is its **Dynamic RAG (Retrieval-Augmented Generation) Quiz Engine**. Instead of relying on a static database of questions, the system dynamically generates highly contextual quizzes tailored to the curriculum.
 
-2. Start the app
+### 1. The RAG Engine (Backend)
+- **Document Ingestion:** The curriculum (e.g., Computer Science Grade 9) is loaded from structured JSON files (`cs_9.json`).
+- **Vector Indexing:** The text is chunked and embedded using local FAISS hybrid search, allowing the system to retrieve the most relevant sections of a chapter.
+- **LLM Streaming:** The selected chunks are passed via prompt to an LLM (powered by OpenRouter, currently utilizing `google/gemini-2.0-flash-001`). The backend (`QuizGenerator`) enforces a strict structure (25% easy, 50% medium, 25% hard) and dynamically streams the response.
+- **Firestore Integration:** The parsed quizzes are automatically serialized and pushed directly to Firebase Firestore under the user's specific composite ID.
 
-   ```bash
-   npx expo start
-   ```
+### 2. The Frontend (React Native)
+- **Mastery Map:** A dynamically generated zig-zag map that visually tracks student progress.
+- **Sequential Unlocking:** The frontend listens to the `users/{userId}/progress` collection in Firestore. Chapters are strictly gated; Chapter N only unlocks when Chapter N-1 is passed with a score of 60% or higher.
+- **Background Generation:** To bypass rate-limits and timeouts, the app triggers background generation requests sequentially. The backend silently generates the curriculum ahead of the user.
+- **Session Management:** Built with Expo Router, the app enforces strict routing rules preventing unauthorized access to the map or accidental swipe-backs to the login screen.
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🚀 Getting Started
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+To run SabakTutor locally, you will need to start both the Python backend and the Expo frontend.
 
-## Get a fresh project
+### Prerequisites
+- Node.js (v18+)
+- Python (3.10+)
+- Firebase Project setup with Authentication & Firestore enabled.
+- OpenRouter API Key
 
-When you're ready, run:
+### 1. Backend Setup (FastAPI)
+
+Navigate to the backend directory and set up your Python virtual environment:
 
 ```bash
-npm run reset-project
+cd backend
+python -m venv .venv
+
+# On Windows:
+.venv\Scripts\activate
+# On Mac/Linux:
+source .venv/bin/activate
+
+pip install -r requirements.txt
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Create a `.env` file in the **root** of the project (outside the backend folder) with the following variables:
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=google/gemini-2.0-flash-001
+EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
 
-## Learn more
+You must also place your Firebase Admin SDK service account file at `/backend/firebase-adminsdk.json`.
 
-To learn more about developing your project with Expo, look at the following resources:
+Run the backend server:
+```bash
+python -m api.main
+```
+The server will run on `http://0.0.0.0:8000`.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 2. Frontend Setup (React Native / Expo)
 
-## Join the community
+Open a new terminal and navigate to the project root:
 
-Join our community of developers creating universal apps.
+```bash
+npm install
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Ensure you have your Firebase configuration (GoogleServices-Info.plist for iOS, google-services.json for Android) set up for React Native Firebase.
+
+Update the `BACKEND_URL` in `app/services/quizService.ts` to match your local IP address where the FastAPI server is running (e.g., `http://192.168.1.xxx:8000`).
+
+Start the Expo development server:
+```bash
+npx expo start
+```
+
+Press `a` to open in an Android Emulator, or `i` for an iOS Simulator.
+
+---
+
+## 📱 Core User Flow
+1. **Signup/Login:** User authenticates via Firebase.
+2. **Mastery Map Loading:** The app queries the backend sequentially to ensure the next 5 chapter quizzes are dynamically generated and waiting in Firestore.
+3. **Quiz Execution:** User clicks an unlocked chapter, takes the RAG-generated quiz, and submits.
+4. **Progress & Energy:** If the score is >= 60%, the progress is saved to Firestore. The Mastery Map instantly reflects this by unlocking the next chapter, coloring the path green, and updating the dynamic Energy Badge (10 points per correct answer).
