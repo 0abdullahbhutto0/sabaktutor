@@ -19,7 +19,6 @@ class NodeState(str, Enum):
     """State of an MCTS node."""
     UNVISITED = "unvisited"
     EXPANDED = "expanded"
-    TERMINAL = "terminal"
 
 
 @dataclass
@@ -108,8 +107,8 @@ class MonteCarloTreeSearch:
         self._doc_to_mcts: Dict[str, str] = {}
 
         self.total_iterations = 0
-        self._best_node_id: Optional[str] = None
         self._best_score: float = 0.0
+        self._best_node_id: Optional[str] = None
 
         self._query_embedding: Optional[np.ndarray] = None
         self._cached_query: Optional[str] = None
@@ -119,6 +118,7 @@ class MonteCarloTreeSearch:
         document_tree,
         root_node_id: Optional[str] = None,
         query: Optional[str] = None,
+        query_embedding: Optional[np.ndarray] = None
     ) -> str:
         """Initialize MCTS with document tree."""
         self.document_tree = document_tree
@@ -142,7 +142,12 @@ class MonteCarloTreeSearch:
         self._expand_node(root_mcts.id)
 
         if query:
-            self._initialize_priors(query)
+            self._cached_query = query
+            if query_embedding is not None:
+                self._query_embedding = query_embedding
+            else:
+                self._query_embedding = self.value_function.embedding_manager.encode_query(query)
+                self._initialize_priors(query,query_embedding=self._query_embedding)
 
         return root_mcts.id
 
@@ -179,15 +184,20 @@ class MonteCarloTreeSearch:
 
         mcts_node.state = NodeState.EXPANDED
 
-    def _initialize_priors(self, query: str) -> None:
+    def _initialize_priors(self, query: str, query_embedding = None) -> None:
         """Initialize prior probabilities using value function."""
-        doc_node_ids = [
-            node.document_node_id
-            for node in self.nodes.values()
-            if not node.document_node_id.startswith("mcts_")
-        ]
+        doc_node_ids = list(self._doc_to_mcts.keys())
 
-        value_estimates = self.value_function.predict_values(query, doc_node_ids)
+        # Remove root if present
+        if self.document_tree and self.document_tree.root_id in doc_node_ids:
+            doc_node_ids.remove(self.document_tree.root_id)
+
+        if not doc_node_ids:
+            return
+
+        value_estimates = self.value_function.predict_values(
+            query, doc_node_ids, query_embedding=query_embedding
+        )
 
         for mcts_node in self.nodes.values():
             doc_id = mcts_node.document_node_id
@@ -199,6 +209,7 @@ class MonteCarloTreeSearch:
         query: str,
         max_results: int = 10,
         early_stop: bool = True,
+        query_embedding: Optional[np.ndarray] = None
     ) -> List[SearchResult]:
         """Perform MCTS search."""
         if not self.root_id:
@@ -206,13 +217,16 @@ class MonteCarloTreeSearch:
 
         start_time = time.time()
         self.total_iterations = 0
-        self._best_node_id = None
         self._best_score = 0.0
+        self._best_node_id = None
 
         self._cached_query = query
-        self._query_embedding = self.value_function.embedding_manager.encode_query(query)
+        if query_embedding is not None:
+            self._query_embedding = query_embedding
+        else:
+            self._query_embedding = self.value_function.embedding_manager.encode_query(query)
         if self._query_embedding.ndim == 2:
-            self._query_embedding = self._query_embedding[0]
+            self._query_embedding = self._query_embedding[0] 
 
         for iteration in range(self.max_iterations):
             path = self._select(self.root_id)
@@ -227,8 +241,9 @@ class MonteCarloTreeSearch:
 
             self.total_iterations += 1
 
+            # FIXED: Early stop checks best NODE visits, not root visits
             if early_stop and self._best_score >= self.early_stop_threshold:
-                if self.nodes[self.root_id].visit_count >= self.min_visits:
+                if self._best_node_id and self.nodes[self._best_node_id].visit_count >= self.min_visits:
                     break
 
             if time.time() - start_time > 60:
@@ -264,6 +279,7 @@ class MonteCarloTreeSearch:
             child = self.nodes[child_id]
 
             if child.visit_count == 0:
+                # Use prior for unvisited nodes, with slight exploration bonus
                 score = child.prior_probability * (1.0 + 0.5 / (parent_visits + 1))
             else:
                 score = child.get_uct_score(parent_visits, self.exploration_constant)
@@ -286,17 +302,30 @@ class MonteCarloTreeSearch:
             if not current_node.children_ids:
                 break
 
-            candidates = [
-                (child_id, self.nodes[child_id].prior_probability)
-                for child_id in current_node.children_ids
-            ]
+            # FIXED: Use UCT-like selection during rollout too, not just priors
+            # This makes rollouts adaptive based on visit statistics
+            candidates = []
+            for child_id in current_node.children_ids:
+                child = self.nodes[child_id]
+                if child.visit_count == 0:
+                    # Unvisited: use prior with small randomization
+                    score = child.prior_probability + random.random() * 0.1
+                else:
+                    # Visited: blend prior with empirical mean
+                    score = (
+                        0.3 * child.prior_probability +
+                        0.7 * child.mean_value +
+                        random.random() * 0.05  # small noise for exploration
+                    )
+                candidates.append((child_id, score))
+
             candidates.sort(key=lambda x: x[1], reverse=True)
             top_candidates = candidates[:3]
 
             if not top_candidates:
                 break
 
-            weights = [c[1] for c in top_candidates]
+            weights = [max(c[1], 0.01) for c in top_candidates]
             total = sum(weights)
 
             if total <= 0:
@@ -317,7 +346,10 @@ class MonteCarloTreeSearch:
 
     def _evaluate_node(self, doc_node_id: str, query: str) -> float:
         """Evaluate a node's relevance to the query using embedding."""
-        values = self.value_function.predict_values(query, [doc_node_id])
+        # FIXED: Pass cached query embedding to avoid re-encoding
+        values = self.value_function.predict_values(
+            query, [doc_node_id], query_embedding=self._query_embedding
+        )
         return values.get(doc_node_id, 0.5)
 
     def _backpropagate(self, path: List[str], reward: float) -> None:
@@ -336,19 +368,19 @@ class MonteCarloTreeSearch:
         if root.visit_count < self.min_visits:
             return
 
-        best = None
         best_value = -float('inf')
+        best_node = None
 
         for node in self.nodes.values():
             if node.visit_count >= self.min_visits:
                 value = node.mean_value
                 if value > best_value:
                     best_value = value
-                    best = node
+                    best_node = node
 
-        if best:
-            self._best_node_id = best.id
+        if best_value > self._best_score:
             self._best_score = best_value
+            self._best_node_id = best_node.id if best_node else None
 
     def _extract_results(self, query: str, max_results: int) -> List[SearchResult]:
         """Extract final results from the search tree."""
@@ -359,9 +391,11 @@ class MonteCarloTreeSearch:
             if node.id == self.root_id or node.visit_count == 0:
                 continue
 
+            # FIXED: Better scoring - use mean_value directly with visit confidence
+            visit_confidence = min(node.visit_count / self.min_visits, 1.0)
             score = (
                 self.value_weight * node.mean_value +
-                self.diversity_weight * min(node.visit_count / 10.0, 1.0)
+                self.diversity_weight * visit_confidence
             )
             scored_nodes.append((score, node))
 
@@ -419,8 +453,8 @@ class MonteCarloTreeSearch:
         self._doc_to_mcts.clear()
         self.root_id = None
         self.document_tree = None
-        self._best_node_id = None
         self._best_score = 0.0
+        self._best_node_id = None
         self.total_iterations = 0
         self._query_embedding = None
         self._cached_query = None

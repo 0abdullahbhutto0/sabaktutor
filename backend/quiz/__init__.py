@@ -14,19 +14,11 @@ from .quiz_generator import (
     MCQOption,
     Difficulty,
 )
-from .quiz_engine import (
-    QuizEngine,
-    QuizAttempt,
-    QuizFeedback,
-)
 
 __all__ = [
     "QuizGenerator",
-    "QuizEngine",
     "Quiz",
     "MCQQuestion",
     "MCQOption",
-    "QuizAttempt",
-    "QuizFeedback",
     "Difficulty",
 ]

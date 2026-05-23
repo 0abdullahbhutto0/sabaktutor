@@ -1,71 +1,131 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-
-// Hardcoded quizzes for MVP (specifically 9th grade Computer Science Chapter 1)
-const QUIZ_DATA: Record<string, any[]> = {
-  ch1: [
-    {
-      question: "Who is known as the father of computer?",
-      options: ["Charles Babbage", "Alan Turing", "John von Neumann", "Bill Gates"],
-      answer: "Charles Babbage",
-    },
-    {
-      question: "Which of the following is an input device?",
-      options: ["Monitor", "Printer", "Keyboard", "Speaker"],
-      answer: "Keyboard",
-    },
-    {
-      question: "RAM stands for?",
-      options: ["Random Access Memory", "Read Access Memory", "Run Access Memory", "Rapid Access Memory"],
-      answer: "Random Access Memory",
-    },
-  ],
-};
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import ChunkyButton from '../components/ChunkyButton';
 
 export default function QuizScreen() {
   const { id } = useLocalSearchParams();
   const quizId = typeof id === 'string' ? id : 'ch1';
-  const questions = QUIZ_DATA[quizId] || QUIZ_DATA['ch1'];
 
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [showResults, setShowResults] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
-  const handleOptionSelect = (option: string) => {
-    if (selectedOption) return; // Prevent multiple selections
-    setSelectedOption(option);
+  useEffect(() => {
+    const fetchQuiz = async () => {
+      try {
+        const user = auth().currentUser;
+        if (!user) return;
+        
+        const quizDocId = `quiz_${user.uid}_${quizId}`;
+        const doc = await firestore().collection('quizzes').doc(quizDocId).get();
+        if (doc.exists) {
+          const data = doc.data();
+          if (data && data.questions) {
+            setQuestions(data.questions);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQuiz();
+  }, [quizId]);
+
+  const handleOptionSelect = (index: number) => {
+    if (selectedOptionIndex !== null) return; // Prevent multiple selections
+    setSelectedOptionIndex(index);
     
     const currentQuestion = questions[currentQuestionIndex];
-    if (option === currentQuestion.answer) {
+    if (index === currentQuestion.correct_index) {
       setScore(score + 1);
     }
 
     // Wait a brief moment before moving to the next question
-    setTimeout(() => {
+    setTimeout(async () => {
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex(currentQuestionIndex + 1);
-        setSelectedOption(null);
+        setSelectedOptionIndex(null);
       } else {
         setShowResults(true);
+        // Save progress if they passed
+        const finalScore = score + (index === currentQuestion.correct_index ? 1 : 0);
+        const percent = finalScore / questions.length;
+        if (percent >= 0.6) {
+          try {
+            const user = auth().currentUser;
+            if (user) {
+              await firestore()
+                .collection('users')
+                .doc(user.uid)
+                .collection('progress')
+                .doc(quizId)
+                .set({
+                  completed: true,
+                  score: finalScore,
+                  total: questions.length,
+                  passed: true,
+                  updatedAt: firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+          } catch (e) {
+            console.error("Failed to save progress:", e);
+          }
+        }
       }
     }, 1000);
   };
 
-  const getOptionStyle = (option: string) => {
-    if (!selectedOption) return styles.optionButton;
+  const getOptionStyle = (index: number) => {
+    if (selectedOptionIndex === null) return styles.optionButton;
     
     const currentQuestion = questions[currentQuestionIndex];
-    if (option === currentQuestion.answer) {
+    if (index === currentQuestion.correct_index) {
       return [styles.optionButton, styles.optionCorrect];
     }
-    if (option === selectedOption) {
+    if (index === selectedOptionIndex) {
       return [styles.optionButton, styles.optionIncorrect];
     }
     return styles.optionButton;
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={{ color: '#FFF', marginTop: 16 }}>Loading quiz...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <MaterialIcons name="hourglass-empty" size={80} color="#94A3B8" />
+          <Text style={styles.resultsTitle}>Quiz Generating</Text>
+          <Text style={[styles.resultsScore, { textAlign: 'center' }]}>Your tailored quiz is being prepared by AI. Please check back in a few seconds.</Text>
+          
+          <ChunkyButton 
+            title="Back to Map" 
+            onPress={() => router.replace('/quiz-selection')}
+            style={styles.primaryButton}
+            textStyle={styles.primaryButtonText}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (showResults) {
     return (
@@ -76,12 +136,12 @@ export default function QuizScreen() {
             <Text style={styles.resultsTitle}>Quiz Completed!</Text>
             <Text style={styles.resultsScore}>You scored {score} out of {questions.length}</Text>
             
-            <TouchableOpacity 
-              style={styles.primaryButton}
+            <ChunkyButton 
+              title="Back to Map" 
               onPress={() => router.replace('/quiz-selection')}
-            >
-              <Text style={styles.primaryButtonText}>Back to Map</Text>
-            </TouchableOpacity>
+              style={styles.primaryButton}
+              textStyle={styles.primaryButtonText}
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -114,24 +174,24 @@ export default function QuizScreen() {
         </View>
 
         <View style={styles.questionCard}>
-          <Text style={styles.questionText}>{currentQuestion.question}</Text>
+          <Text style={styles.questionText}>{currentQuestion.stem}</Text>
         </View>
 
         <View style={styles.optionsContainer}>
-          {currentQuestion.options.map((option: string, index: number) => (
+          {currentQuestion.options.map((option: any, index: number) => (
             <TouchableOpacity
               key={index}
-              style={getOptionStyle(option)}
-              onPress={() => handleOptionSelect(option)}
+              style={getOptionStyle(index)}
+              onPress={() => handleOptionSelect(index)}
               activeOpacity={0.7}
-              disabled={selectedOption !== null}
+              disabled={selectedOptionIndex !== null}
             >
               <Text style={[
                 styles.optionText,
-                selectedOption && option === currentQuestion.answer && styles.optionTextCorrect,
-                selectedOption === option && option !== currentQuestion.answer && styles.optionTextIncorrect
+                selectedOptionIndex !== null && index === currentQuestion.correct_index && styles.optionTextCorrect,
+                selectedOptionIndex === index && index !== currentQuestion.correct_index && styles.optionTextIncorrect
               ]}>
-                {option}
+                {option.text}
               </Text>
             </TouchableOpacity>
           ))}

@@ -4,7 +4,7 @@ Hybrid Search Engine Module
 
 from typing import List, Dict, Optional, Set, Any
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
 import threading
 import time
 
@@ -58,10 +58,7 @@ class SearchResponse:
 
 
 class HybridSearchEngine:
-    """
-    Hybrid search engine combining value-based and MCTS-based tree search.
-    Now with full logging and multi-book support.
-    """
+    """Hybrid search engine combining value-based and MCTS-based tree search."""
 
     def __init__(
         self,
@@ -72,15 +69,11 @@ class HybridSearchEngine:
     ):
         self.book_id = book_id
         self.config = config or self._default_config()
-        self.embedding_manager = embedding_manager or EmbeddingManager(
-            model_name=self.config.embedding.model_name,
-            normalize=self.config.embedding.normalize_embeddings,
-            embedding_dim=self.config.embedding.embedding_dim,
-        )
+        self.embedding_manager = embedding_manager or EmbeddingManager()
 
         self.value_function = ValueFunction(
             embedding_manager=self.embedding_manager,
-            top_k=self.config.top_k_chunks,
+            top_k=self.config.top_k_nodes,
             use_sqrt_normalization=self.config.use_square_root_normalization,
             vector_store_path=vector_store_path,
         )
@@ -100,8 +93,6 @@ class HybridSearchEngine:
         self._indexed = False
         self._visited_nodes: Set[str] = set()
         self._lock = threading.RLock()
-        self.search_stats: Dict[str, Any] = {}
-        
 
     def _default_config(self):
         """Default configuration."""
@@ -109,37 +100,37 @@ class HybridSearchEngine:
         return SearchConfig()
 
     def index_tree(self, tree: DocumentTree, show_progress: bool = False) -> Dict[str, Any]:
-        """Index a document tree for search with full logging."""
+        """Index a document tree for search."""
         with self._lock:
             self.tree = tree
             timing = self.value_function.index_tree(tree, show_progress)
             self._indexed = True
-                
-            stats = {
+
+            return {
                 "total_nodes": tree.get_node_count(),
-                "total_chunks": timing.chunks_created + timing.chunks_loaded_from_store,
-                "new_embeddings": timing.chunks_embedded,
-                "loaded_from_store": timing.chunks_loaded_from_store,
+                "total_indexed": timing.nodes_processed,
+                "new_embeddings": timing.nodes_embedded,
+                "loaded_from_store": timing.nodes_loaded_from_store,
                 "indexing_time_ms": timing.total_time_ms,
             }
-            return stats
 
     def search(self, query: str, options: Optional[SearchOptions] = None) -> SearchResponse:
-        """Perform hybrid search with comprehensive logging."""
+        """Perform hybrid search."""
         options = options or SearchOptions()
-            
         start_time = time.time()
 
         if not self._indexed:
             raise ValueError("No documents indexed. Call index_tree() first.")
 
-        with self._lock:
-            self._visited_nodes.clear()
+        self._visited_nodes.clear()
 
-        results = self._search_hybrid(query, options)
+        # Compute query embedding ONCE per request — sync, no await
+        query_embedding = self.embedding_manager.encode_query(query)
+
+        results = self._search_hybrid(query, options, query_embedding)
         search_time = time.time() - start_time
-            
-        response = SearchResponse(
+
+        return SearchResponse(
             query=query,
             results=results,
             search_time=search_time,
@@ -154,85 +145,55 @@ class HybridSearchEngine:
                 },
                 "book_id": self.book_id,
             },
-        )     
-        return response
+        )
 
-    def _search_hybrid(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
-        """Perform hybrid search combining value-based and MCTS-based approaches."""
-        results: Dict[str, Dict[str, Any]] = {}
-        visited: Set[str] = set()
+    def _search_hybrid(self, query: str, options: SearchOptions, query_embedding) -> List[Dict[str, Any]]:
+        """
+        Perform hybrid search combining value-based and MCTS-based approaches.
+        Query embedding computed once and passed through.
+        """
+        # Phase 1: Value-based search (fast, broad recall)
+        value_results = self._search_value_only(query, options, query_embedding)
 
         if self.tree:
-            self.mcts.initialize(self.tree, query=query)
+            self.mcts.initialize(self.tree, query=query, query_embedding=query_embedding)
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            value_future = executor.submit(self._search_value_only, query, options)
-            mcts_future = executor.submit(
-                self.mcts.search, query, options.max_results, options.early_stop
-            )
+        self.mcts.max_iterations = options.max_iterations
+        self.mcts.early_stop_threshold = options.early_stop_threshold
+        
+        # Run MCTS in thread pool to avoid blocking event loop
+        mcts_results = self.mcts.search(query, options.max_results, options.early_stop, query_embedding)
+        
+        return self._merge_results(value_results, mcts_results, query, options)
 
-            for result in value_future.result():
-                node_id = result["node_id"]
-                if node_id not in visited:
-                    results[node_id] = result
-                    visited.add(node_id)
-                    self._visited_nodes.add(node_id)
-
-            for result in mcts_future.result():
-                node_id = result.document_node_id
-                if node_id not in visited:
-                    results[node_id] = {
-                        "node_id": node_id,
-                        "score": result.score * options.value_weight,
-                        "source": "mcts",
-                        "visit_count": result.visit_count,
-                        "content": result.content,
-                        "depth": result.depth,
-                        "path": result.path,
-                    }
-                    visited.add(node_id)
-                    self._visited_nodes.add(node_id)
-
-        candidates = list(results.values())
-
-        path_prefixes = {}
-        for candidate in candidates:
-            path = candidate.get("path", [])
-            prefix = "/".join(path[:2]) if len(path) >= 2 else candidate["node_id"]
-            path_prefixes[prefix] = path_prefixes.get(prefix, 0) + 1
-
-        for candidate in candidates:
-            path = candidate.get("path", [])
-            prefix = "/".join(path[:2]) if len(path) >= 2 else candidate["node_id"]
-            diversity_penalty = 1.0 / path_prefixes[prefix]
-            candidate["diversity_score"] = diversity_penalty
-
-        final_results = []
-        for candidate in candidates:
-            combined_score = (
-                options.value_weight * candidate["score"] +
-                options.diversity_weight * candidate.get("diversity_score", 0.0)
-            )
-            candidate["combined_score"] = combined_score
-            final_results.append(candidate)
-
-        final_results.sort(key=lambda x: x["combined_score"], reverse=True)
-        return final_results[:options.max_results]
-
-    def _search_value_only(self, query: str, options: SearchOptions) -> List[Dict[str, Any]]:
-        """Perform value-based search only using embeddings."""
+    def _search_value_only(self, query: str, options: SearchOptions, query_embedding) -> List[Dict[str, Any]]:
+        """
+        Perform value-based search only using embeddings.
+        """
         results = []
         if not self.tree:
             return results
 
         nodes_to_evaluate = [
             node.id for node in self.tree.get_all_nodes()
-            if not node.is_root and (node.chunks or len(node.content) > 50)
+            if not node.is_root and len(node.content) > 50
         ]
 
-        value_estimates = self.value_function.predict_values(query, nodes_to_evaluate)
+        if not nodes_to_evaluate:
+            return results
+
+        if len(nodes_to_evaluate) > 500:
+            nodes_to_evaluate = sorted(
+                nodes_to_evaluate,
+                key=lambda nid: self.tree.get_node(nid).depth if self.tree.get_node(nid) else 0,
+                reverse=True,
+            )[:500]
+
+        value_estimates = self.value_function.predict_values(query, nodes_to_evaluate, query_embedding=query_embedding)
 
         for node_id, score in value_estimates.items():
+            if score <= 0.0:
+                continue
             node = self.tree.get_node(node_id)
             if node:
                 results.append({
@@ -242,47 +203,131 @@ class HybridSearchEngine:
                     "content": node.content,
                     "depth": node.depth,
                     "title": node.title,
-                    "num_chunks": node.num_chunks,
+                    "path": node.path.split("/") if node.path else [node_id],
                 })
                 self._visited_nodes.add(node_id)
 
         results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:options.max_results]
+        return results[:options.max_results * 2]
+    def _merge_results(
+        self,
+        value_results: List[Dict[str, Any]],
+        mcts_results: List[SearchResult],
+        query: str,
+        options: SearchOptions,
+    ) -> List[Dict[str, Any]]:
+        """
+        Merge value and MCTS results with proper normalization.
+        FIXED: No double-weighting, both scores normalized to [0,1] first.
+        """
+        merged: Dict[str, Dict[str, Any]] = {}
 
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get search engine statistics."""
-        with self._lock:
-            return {
-                "book_id": self.book_id,
-                "mcts_stats": self.mcts.get_statistics(),
-                "indexed": self._indexed,
-                "index_size": self.value_function.index_size,
-                "visited_nodes": len(self._visited_nodes),
-                "tree_nodes": self.tree.get_node_count() if self.tree else 0,
+        # Normalize value scores to [0, 1]
+        if value_results:
+            max_val = max(r["score"] for r in value_results)
+            min_val = min(r["score"] for r in value_results)
+            val_range = max_val - min_val if max_val != min_val else 1.0
+            for r in value_results:
+                r["normalized_score"] = (r["score"] - min_val) / val_range
+        else:
+            max_val = min_val = val_range = 1.0
+
+        # Normalize MCTS scores to [0, 1]
+        if mcts_results:
+            max_mcts = max(r.score for r in mcts_results)
+            min_mcts = min(r.score for r in mcts_results)
+            mcts_range = max_mcts - min_mcts if max_mcts != min_mcts else 1.0
+            for r in mcts_results:
+                r._norm_score = (r.score - min_mcts) / mcts_range
+        else:
+            max_mcts = min_mcts = mcts_range = 1.0
+
+        # Add value results
+        for r in value_results:
+            nid = r["node_id"]
+            merged[nid] = {
+                "node_id": nid,
+                "value_score": r["normalized_score"],
+                "mcts_score": 0.0,
+                "content": r["content"],
+                "depth": r["depth"],
+                "title": r.get("title"),
+                "path": r.get("path", [nid]),
+                "sources": ["value"],
+                "visit_count": 0,
             }
+            self._visited_nodes.add(nid)
 
-    def clear_caches(self) -> None:
-        """Clear all caches."""
-        with self._lock:
-            self.value_function.clear_index()
-            self.mcts.clear_cache()
-            self.embedding_manager.clear_cache()
-            self._visited_nodes.clear()
+        # Add/merge MCTS results
+        for r in mcts_results:
+            nid = r.document_node_id
+            norm_score = getattr(r, '_norm_score', r.score)
 
+            if nid in merged:
+                # Node found by both - combine scores
+                merged[nid]["mcts_score"] = norm_score
+                merged[nid]["sources"].append("mcts")
+                merged[nid]["visit_count"] = r.visit_count
+            else:
+                merged[nid] = {
+                    "node_id": nid,
+                    "value_score": 0.0,
+                    "mcts_score": norm_score,
+                    "content": r.content,
+                    "depth": r.depth,
+                    "title": None,
+                    "path": r.path,
+                    "sources": ["mcts"],
+                    "visit_count": r.visit_count,
+                }
+            self._visited_nodes.add(nid)
 
-def create_hybrid_engine(
-    embedding_model: str = "BAAI/bge-small-en-v1.5",
-    config: Optional[Any] = None,
-    vector_store_path: str = "./vector_index",
-    book_id: str = "default",
-) -> HybridSearchEngine:
-    """Factory function to create a hybrid search engine."""
-    if config is None:
-        from config import SearchConfig
-        config = SearchConfig()
-    config.embedding.model_name = embedding_model
-    return HybridSearchEngine(
-        config=config,
-        vector_store_path=vector_store_path,
-        book_id=book_id,
-    )
+        # Compute diversity scores
+        candidates = list(merged.values())
+
+        path_prefixes = Counter(
+            "/".join(r.get("path", [])[:2]) if len(r.get("path", [])) >= 2 else r["node_id"]
+            for r in candidates
+        )
+
+        for candidate in candidates:
+            path = candidate.get("path", [])
+            prefix = "/".join(path[:2]) if len(path) >= 2 else candidate["node_id"]
+            # Cap diversity boost to prevent extreme values
+            candidate["diversity_score"] = min(1.0 / path_prefixes[prefix], 1.0)
+
+        # Combine scores - FIXED: use options weights once, not twice
+        for candidate in candidates:
+            # Hybrid score = weighted blend of value and mcts, then diversity
+            blended = max(candidate["value_score"], candidate["mcts_score"])
+            # If both sources agree, boost; if only one source, use that
+            if candidate["value_score"] > 0 and candidate["mcts_score"] > 0:
+                # Both found it - boost
+                blended = 0.6 * max(candidate["value_score"], candidate["mcts_score"]) + \
+                          0.4 * ((candidate["value_score"] + candidate["mcts_score"]) / 2)
+
+            candidate["combined_score"] = (
+                (1 - options.diversity_weight) * blended +
+                options.diversity_weight * candidate.get("diversity_score", 0.0)
+            )
+
+        candidates.sort(key=lambda x: x["combined_score"], reverse=True)
+
+        # Clean up for output
+        final = []
+        for c in candidates[:options.max_results]:
+            final.append({
+                "node_id": c["node_id"],
+                "score": round(c["combined_score"], 4),
+                "value_score": round(c["value_score"], 4),
+                "mcts_score": round(c["mcts_score"], 4),
+                "diversity_score": round(c.get("diversity_score", 0), 4),
+                "sources": c["sources"],
+                "visit_count": c["visit_count"],
+                "content": c["content"][:500] if c["content"] else "",
+                "depth": c["depth"],
+                "title": c.get("title"),
+                "path": c.get("path", []),
+            })
+
+        return final

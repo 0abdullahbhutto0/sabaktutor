@@ -39,7 +39,7 @@ class EmbeddingConfig:
 class MCTSConfig:
     """Configuration for Monte Carlo Tree Search."""
 
-    max_iterations: int = 75
+    max_iterations: int = 1000
     max_depth: int = 50
     exploration_constant: float = 1.414
     min_visits: int = 5
@@ -80,7 +80,7 @@ class SearchConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     mcts: MCTSConfig = field(default_factory=MCTSConfig)
 
-    top_k_chunks: int = 10
+    top_k_nodes: int = 10
     score_aggregation: str = "mean"
     use_square_root_normalization: bool = True
 
