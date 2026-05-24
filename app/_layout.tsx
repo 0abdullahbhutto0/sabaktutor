@@ -1,5 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 export default function RootLayout() {
@@ -35,8 +36,10 @@ export default function RootLayout() {
   if (initializing) return null;
 
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false, gestureEnabled: false }} />
+    <>
+      <StatusBar style="dark" />
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="signup" options={{ headerTitle: 'Signup', headerBackTitle: 'Back' }} />
       <Stack.Screen name="login" options={{ headerTitle: 'Login', headerBackTitle: 'Back' }} />
       <Stack.Screen name="grade-selection" options={{ headerShown: false, gestureEnabled: false }} />
@@ -45,6 +48,7 @@ export default function RootLayout() {
       <Stack.Screen name="profile" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
       <Stack.Screen name="lesson/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />
-    </Stack>
+      </Stack>
+    </>
   );
 }

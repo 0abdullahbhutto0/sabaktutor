@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform, ActivityIndicator, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar as RNStatusBar, Platform, ActivityIndicator, TextInput, ScrollView } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -190,6 +191,7 @@ export default function QuizScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text style={{ color: '#FFF', marginTop: 16 }}>Loading quiz...</Text>
@@ -201,6 +203,7 @@ export default function QuizScreen() {
   if (isGenerating && !generationFailed && questions.length === 0) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="hourglass-empty" size={80} color="#94A3B8" />
           <Text style={styles.resultsTitle}>Quiz Generating</Text>
@@ -218,6 +221,7 @@ export default function QuizScreen() {
   if (generationFailed || questions.length === 0) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="error-outline" size={80} color="#EF4444" />
           <Text style={styles.resultsTitle}>Generation Failed</Text>
@@ -258,6 +262,7 @@ export default function QuizScreen() {
     const passed = hearts > 0 && (score / questions.length) >= 0.6;
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={styles.container}>
           <View style={styles.resultsCard}>
             <MaterialIcons name={passed ? "emoji-events" : "sentiment-dissatisfied"} size={80} color={passed ? "#FFD700" : "#EF4444"} />
@@ -279,6 +284,7 @@ export default function QuizScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <StatusBar style="light" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="close" size={24} color="#94A3B8" />
@@ -390,7 +396,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#0F172A',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: 'row',

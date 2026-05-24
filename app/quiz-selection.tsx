@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Pressable, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Pressable, Dimensions, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Defs, Pattern, Circle, Rect } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import ChunkyButton from './components/ChunkyButton';
-import { preloadNextQuizzes, BOOK_CHAPTERS } from './services/quizService';
+import { preloadNextQuizzes, BOOK_CHAPTERS, CHAPTER_TITLES } from './services/quizService';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
@@ -27,6 +27,8 @@ export default function MasteryMap() {
   const { subject } = useLocalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const [progress, setProgress] = React.useState<Record<string, boolean>>(cachedProgress);
   const [masteryPoints, setMasteryPoints] = React.useState<number>(cachedMasteryPoints);
@@ -153,15 +155,17 @@ export default function MasteryMap() {
   }, [subjectStr]);
 
   const chaptersMap = BOOK_CHAPTERS[subjectStr] || BOOK_CHAPTERS['physics'];
+  const titlesMap = CHAPTER_TITLES[subjectStr] || CHAPTER_TITLES['physics'];
   const chaptersCount = Object.keys(chaptersMap).length;
   
   const nodes = Array.from({ length: chaptersCount * 2 }).map((_, i) => {
     const chapterNum = Math.floor(i / 2) + 1;
     const level = `ch${chapterNum}`;
     const type = i % 2 === 0 ? 'lesson' : 'quiz';
-    const title = type === 'lesson' ? `Ch ${chapterNum}: Learn` : `Ch ${chapterNum}: Test`;
+    const chapterName = titlesMap[level] || `Chapter ${chapterNum}`;
+    const typeLabel = type === 'lesson' ? 'Lesson' : 'Quest';
     const globalId = userId ? `${type}_${userId}_${bookId}_${level}` : '';
-    return { index: i, type, level, title, globalId };
+    return { index: i, type, level, title: chapterName, typeLabel, globalId };
   });
 
   const isCompleted = (globalId: string) => !!progress[globalId];
@@ -171,6 +175,22 @@ export default function MasteryMap() {
     const prevNode = nodes[index - 1];
     return isCompleted(prevNode.globalId);
   };
+
+  useEffect(() => {
+    // Only scroll after progress is loaded (or if they are just starting at node 0)
+    const highestUnlockedIndex = nodes.reduce((highest, node, i) => {
+      return isUnlocked(i) ? i : highest;
+    }, 0);
+    
+    const { height: screenHeight } = Dimensions.get('window');
+    // Center the current node (y = index * 140) vertically on the screen
+    const targetY = Math.max(0, (highestUnlockedIndex * 140) - (screenHeight / 2) + 140);
+    
+    // Slight delay to ensure layout is complete
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+    }, 300);
+  }, [progress, subjectStr]);
 
   const getXForIndex = (index: number) => {
     const mod = index % 4;
@@ -190,9 +210,9 @@ export default function MasteryMap() {
     if (i >= nodes.length - 1) return null;
     const startX = getXForIndex(i);
     const endX = getXForIndex(i + 1);
-    const startY = i * 120;
-    const endY = (i + 1) * 120;
-    const midY = startY + 60;
+    const startY = i * 140;
+    const endY = (i + 1) * 140;
+    const midY = startY + 70;
     
     const unlocked = isUnlocked(i + 1);
     
@@ -208,7 +228,7 @@ export default function MasteryMap() {
     );
   };
 
-  const totalHeight = Math.max((nodes.length - 1) * 120 + NODE_SIZE, 600);
+  const totalHeight = Math.max((nodes.length - 1) * 140 + NODE_SIZE + 80, 600);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -219,6 +239,7 @@ export default function MasteryMap() {
             onPress={() => router.replace('/subject-selection')}
             color="#bfdbfe"
             shadowColor="#60a5fa"
+            chunky
             style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24 }}
             textStyle={{ color: '#1e3a8a', fontSize: 16, marginLeft: 0 }}
           >
@@ -231,6 +252,7 @@ export default function MasteryMap() {
             onPress={() => router.push(`/streak?subject=${subjectStr}` as any)}
             color="#fed7aa"
             shadowColor="#f97316"
+            chunky
             style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24 }}
           >
             <Animated.View style={animatedFireStyle}>
@@ -243,6 +265,7 @@ export default function MasteryMap() {
             onPress={() => router.replace({ pathname: '/leaderboard', params: { subject: subjectStr } })}
             color="#fed023"
             shadowColor="#d4a300"
+            chunky
             style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24 }}
           >
             <MaterialIcons name="bolt" size={28} color="#6f5900" />
@@ -251,8 +274,18 @@ export default function MasteryMap() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Dotted canvas background */}
         <View style={{ width: MAP_WIDTH, height: totalHeight, alignSelf: 'center', position: 'relative' }}>
+          <Svg width={MAP_WIDTH} height={totalHeight} style={{ position: 'absolute', top: 0, left: 0 }} pointerEvents="none">
+            <Defs>
+              <Pattern id="dotPattern" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+                <Circle cx="1.5" cy="1.5" r="1.5" fill="#cbd5e1" opacity="0.35" />
+              </Pattern>
+            </Defs>
+            <Rect x="0" y="0" width={MAP_WIDTH} height={totalHeight} fill="url(#dotPattern)" />
+          </Svg>
+
           {/* Dashed Path (SVG) */}
           <Svg height={totalHeight} width={MAP_WIDTH} style={{ position: 'absolute', top: NODE_SIZE / 2, left: 0 }}>
             {nodes.map((_, i) => renderPath(i))}
@@ -260,7 +293,7 @@ export default function MasteryMap() {
 
           {nodes.map((node, i) => {
             const x = getXForIndex(i);
-            const y = i * 120;
+            const y = i * 140;
             const completed = isCompleted(node.globalId);
             const unlocked = isUnlocked(i);
             const iconName = getIconName(node.type, completed) as any;
@@ -284,8 +317,28 @@ export default function MasteryMap() {
                     <MaterialIcons name={iconName} size={48} color="#ffffff" />
                   )}
                 </Pressable>
-                <View style={!unlocked ? styles.nodeLabelLocked : completed ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked}>
-                  <Text style={!unlocked ? styles.nodeLabelTextLocked : completed ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}>{node.title}</Text>
+                <View style={[
+                  !unlocked ? styles.nodeLabelLocked : completed ? styles.nodeLabelCompleted : styles.nodeLabelUnlocked,
+                ]}>
+                  <View style={[
+                    styles.typeBadge,
+                    node.type === 'lesson' ? styles.typeBadgeLesson : styles.typeBadgeQuest,
+                    !unlocked && { opacity: 0.5 },
+                  ]}>
+                    <MaterialCommunityIcons 
+                      name={node.type === 'lesson' ? 'book-open-variant' : 'sword-cross'} 
+                      size={12} 
+                      color={node.type === 'lesson' ? '#1e3a8a' : '#7c2d12'} 
+                    />
+                    <Text style={[
+                      styles.typeBadgeText,
+                      node.type === 'lesson' ? { color: '#1e3a8a' } : { color: '#7c2d12' },
+                    ]}>{node.typeLabel}</Text>
+                  </View>
+                  <Text 
+                    style={!unlocked ? styles.nodeLabelTextLocked : completed ? styles.nodeLabelTextCompleted : styles.nodeLabelTextUnlocked}
+                    numberOfLines={2}
+                  >{node.title}</Text>
                 </View>
               </View>
             );
@@ -299,7 +352,10 @@ export default function MasteryMap() {
         onPress={() => router.push(`/chat?subject=${subjectStr}` as any)}
         activeOpacity={0.8}
       >
-        <MaterialIcons name="smart-toy" size={28} color="#FFF" />
+        <Image 
+          source={require('../assets/images/sabaktutor-logo.png')} 
+          style={{ width: 64, height: 64, borderRadius: 32 }} 
+        />
       </TouchableOpacity>
 
       {/* Bottom Navigation Bar */}
@@ -377,7 +433,8 @@ const styles = StyleSheet.create({
   nodeContainer: {
     position: 'absolute',
     alignItems: 'center',
-    width: NODE_SIZE,
+    width: NODE_SIZE + 80,
+    marginLeft: -40,
   },
   nodeCompleted: {
     width: NODE_SIZE,
@@ -388,27 +445,26 @@ const styles = StyleSheet.create({
     borderColor: '#006d37',
     justifyContent: 'center',
     alignItems: 'center',
-    borderBottomWidth: 8, // Chunky shadow effect
+    borderBottomWidth: 8,
   },
   nodePressed: {
     borderBottomWidth: 0,
-    marginTop: 8, // Absorb the 8px bottom border difference
+    marginTop: 8,
   },
   nodeLabelCompleted: {
-    position: 'absolute',
-    top: NODE_SIZE + 12,
-    alignSelf: 'center',
-    width: 180,
+    marginTop: 8,
+    width: NODE_SIZE + 60,
     backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#d1e4fb',
+    alignItems: 'center',
   },
   nodeLabelTextCompleted: {
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 12,
     color: '#091d2e',
     textAlign: 'center',
   },
@@ -416,7 +472,7 @@ const styles = StyleSheet.create({
     width: NODE_SIZE,
     height: NODE_SIZE,
     borderRadius: NODE_SIZE/2,
-    backgroundColor: '#3B82F6', // Blue to indicate playable
+    backgroundColor: '#3B82F6',
     borderWidth: 4,
     borderColor: '#1D4ED8',
     justifyContent: 'center',
@@ -424,20 +480,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
   },
   nodeLabelUnlocked: {
-    position: 'absolute',
-    top: NODE_SIZE + 12,
-    alignSelf: 'center',
-    width: 180,
+    marginTop: 8,
+    width: NODE_SIZE + 60,
     backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#3B82F6',
+    alignItems: 'center',
   },
   nodeLabelTextUnlocked: {
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 12,
     color: '#1D4ED8',
     textAlign: 'center',
   },
@@ -453,23 +508,43 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   nodeLabelLocked: {
-    position: 'absolute',
-    top: NODE_SIZE + 12,
-    alignSelf: 'center',
-    width: 180,
+    marginTop: 8,
+    width: NODE_SIZE + 60,
     backgroundColor: '#d9eaff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#bbcbbb',
     opacity: 0.6,
+    alignItems: 'center',
   },
   nodeLabelTextLocked: {
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 12,
     color: '#3d4a3e',
     textAlign: 'center',
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginBottom: 2,
+  },
+  typeBadgeLesson: {
+    backgroundColor: '#dbeafe',
+  },
+  typeBadgeQuest: {
+    backgroundColor: '#ffedd5',
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   bottomNav: {
     flexDirection: 'row',
@@ -514,7 +589,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
