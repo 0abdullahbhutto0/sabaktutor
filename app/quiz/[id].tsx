@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform, ActivityIndicator, TextInput, ScrollView } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -11,6 +12,7 @@ export default function QuizScreen() {
   const { id, subject } = useLocalSearchParams();
   const quizId = typeof id === 'string' ? id : 'ch1';
   const subjectStr = typeof subject === 'string' ? subject : 'physics';
+  const insets = useSafeAreaInsets();
   const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [questions, setQuestions] = useState<any[]>([]);
@@ -88,6 +90,17 @@ export default function QuizScreen() {
             passed: passed,
             updatedAt: firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
+
+        if (passed) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          await firestore()
+            .collection('users')
+            .doc(user.uid)
+            .set({
+              energyPoints: firestore.FieldValue.increment(20),
+              activeDates: firestore.FieldValue.arrayUnion(todayStr)
+            }, { merge: true });
+        }
       }
     } catch (e) {
       console.error("Failed to save progress:", e);
@@ -176,7 +189,7 @@ export default function QuizScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text style={{ color: '#FFF', marginTop: 16 }}>Loading quiz...</Text>
@@ -187,7 +200,7 @@ export default function QuizScreen() {
 
   if (isGenerating && !generationFailed && questions.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="hourglass-empty" size={80} color="#94A3B8" />
           <Text style={styles.resultsTitle}>Quiz Generating</Text>
@@ -204,7 +217,7 @@ export default function QuizScreen() {
 
   if (generationFailed || questions.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="error-outline" size={80} color="#EF4444" />
           <Text style={styles.resultsTitle}>Generation Failed</Text>
@@ -244,7 +257,7 @@ export default function QuizScreen() {
   if (showResults) {
     const passed = hearts > 0 && (score / questions.length) >= 0.6;
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
         <View style={styles.container}>
           <View style={styles.resultsCard}>
             <MaterialIcons name={passed ? "emoji-events" : "sentiment-dissatisfied"} size={80} color={passed ? "#FFD700" : "#EF4444"} />
@@ -265,7 +278,7 @@ export default function QuizScreen() {
   const qType = currentQuestion.type || 'mcq';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="close" size={24} color="#94A3B8" />

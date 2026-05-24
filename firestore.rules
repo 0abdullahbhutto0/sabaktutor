@@ -10,17 +10,20 @@ service cloud.firestore {
     
     match /quizzes/{quizId} {
       allow read: if request.auth != null;
-      allow write: if false; // Only written by admin/backend
+      allow delete: if request.auth != null && quizId.matches('quiz_' + request.auth.uid + '.*');
+      allow create, update: if false; // Only written by admin/backend
     }
 
     match /lessons/{lessonId} {
       allow read: if request.auth != null;
-      allow write: if false; // Only written by admin/backend
+      allow delete: if request.auth != null && lessonId.matches('lesson_' + request.auth.uid + '.*');
+      allow create, update: if false; // Only written by admin/backend
     }
 
     // Users can only read and write their own profile and progress
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
       
       match /progress/{progressId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;

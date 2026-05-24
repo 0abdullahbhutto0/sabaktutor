@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, TouchableOpacity, Animated, Platform, StatusBar, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -13,6 +14,7 @@ export default function LessonScreen() {
   const { id, subject } = useLocalSearchParams();
   const level = typeof id === 'string' ? id : 'ch1';
   const subjectStr = typeof subject === 'string' ? subject : 'physics';
+  const insets = useSafeAreaInsets();
   const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [flashcards, setFlashcards] = useState<any[]>([]);
@@ -96,6 +98,15 @@ export default function LessonScreen() {
               completed: true,
               updatedAt: firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
+
+          const todayStr = new Date().toISOString().split('T')[0];
+          await firestore()
+            .collection('users')
+            .doc(user.uid)
+            .set({
+              energyPoints: firestore.FieldValue.increment(10),
+              activeDates: firestore.FieldValue.arrayUnion(todayStr)
+            }, { merge: true });
         }
       } catch(e) {
         console.error(e);
@@ -124,8 +135,8 @@ export default function LessonScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialIcons name="close" size={24} color="#94A3B8" />
           </TouchableOpacity>
@@ -140,8 +151,8 @@ export default function LessonScreen() {
 
   if (isGenerating && !generationFailed && flashcards.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <View style={[styles.cardContainer, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="hourglass-empty" size={80} color="#94A3B8" />
           <Text style={styles.title}>Lesson Generating</Text>
           <Text style={styles.subtitle}>Your tailored flashcards are being prepared by AI. Please check back in a few seconds.</Text>
@@ -157,8 +168,8 @@ export default function LessonScreen() {
 
   if (generationFailed || flashcards.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <View style={[styles.cardContainer, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="error-outline" size={80} color="#EF4444" />
           <Text style={styles.title}>Generation Failed</Text>
           <Text style={styles.subtitle}>The AI was unable to generate flashcards for this chapter.</Text>
@@ -192,10 +203,11 @@ export default function LessonScreen() {
     );
   }
 
+  const progressPercent = ((currentIndex + 1) / flashcards.length) * 100;
   const currentCard = flashcards[currentIndex];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />

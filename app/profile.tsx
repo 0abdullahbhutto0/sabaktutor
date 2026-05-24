@@ -49,11 +49,8 @@ export default function Profile() {
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Map</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem} disabled>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/leaderboard', params: { subject: subjectStr } })}>
           <MaterialIcons name="leaderboard" size={28} color="#bbcbbb" />
-          <View style={styles.comingSoonBadge}>
-            <Text style={styles.comingSoonText}>SOON</Text>
-          </View>
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Leaderboard</Text>
         </TouchableOpacity>
 

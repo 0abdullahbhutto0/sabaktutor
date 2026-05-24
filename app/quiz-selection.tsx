@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Pre
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import ChunkyButton from './components/ChunkyButton';
 import { preloadNextQuizzes, BOOK_CHAPTERS } from './services/quizService';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -14,47 +16,140 @@ const RIGHT_X = MAP_WIDTH - 60;
 const LEFT_X = 60;
 const NODE_SIZE = 96;
 
+let cachedProgress: Record<string, boolean> = {};
+let cachedMasteryPoints: number = 0;
+let cachedStreak: number = 0;
+let hasPreloadedSubjects: Record<string, boolean> = {};
+let currentUserCacheId: string = '';
+
 export default function MasteryMap() {
   const router = useRouter();
   const { subject } = useLocalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
-  const [progress, setProgress] = React.useState<Record<string, boolean>>({});
-  const [masteryPoints, setMasteryPoints] = React.useState<number>(0);
+  const [progress, setProgress] = React.useState<Record<string, boolean>>(cachedProgress);
+  const [masteryPoints, setMasteryPoints] = React.useState<number>(cachedMasteryPoints);
+  const [streak, setStreak] = React.useState<number>(cachedStreak);
   const [userId, setUserId] = React.useState<string | null>(null);
 
+  const fireScale = useSharedValue(1);
+  const fireOpacity = useSharedValue(0.8);
+
   useEffect(() => {
-    preloadNextQuizzes(0, subjectStr);
-    
+    if (streak > 0) {
+      fireScale.value = withRepeat(withSequence(
+        withTiming(1.25, { duration: 300 }),
+        withTiming(1, { duration: 300 }),
+        withTiming(1, { duration: 1400 })
+      ), -1, false);
+      fireOpacity.value = withRepeat(withSequence(
+        withTiming(1, { duration: 300 }),
+        withTiming(0.7, { duration: 300 }),
+        withTiming(0.7, { duration: 1400 })
+      ), -1, false);
+    } else {
+      fireScale.value = 1;
+      fireOpacity.value = 1;
+    }
+  }, [streak]);
+
+  const animatedFireStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: fireScale.value }],
+    opacity: fireOpacity.value
+  }));
+
+  useEffect(() => {
     const user = auth().currentUser;
     if (!user) return;
     setUserId(user.uid);
 
-    // Listen to user progress and scores
-    const unsubscribe = firestore()
+    if (user.uid !== currentUserCacheId) {
+      cachedProgress = {};
+      cachedMasteryPoints = 0;
+      cachedStreak = 0;
+      hasPreloadedSubjects = {};
+      currentUserCacheId = user.uid;
+      setProgress({});
+      setMasteryPoints(0);
+      setStreak(0);
+    }
+
+    if (!hasPreloadedSubjects[subjectStr]) {
+      preloadNextQuizzes(0, subjectStr);
+      hasPreloadedSubjects[subjectStr] = true;
+    }
+
+    // Listen to user progress
+    const unsubscribeProgress = firestore()
       .collection('users')
       .doc(user.uid)
       .collection('progress')
       .onSnapshot((snapshot) => {
         const newProgress: Record<string, boolean> = {};
-        let totalPoints = 0;
-        
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.passed) {
-            newProgress[doc.id] = true;
-          }
-          if (typeof data.score === 'number') {
-            totalPoints += data.score * 10;
-          }
-        });
-        
+        if (snapshot && snapshot.forEach) {
+          snapshot.forEach(doc => {
+            if (doc && doc.data && doc.data().passed) {
+              newProgress[doc.id] = true;
+            }
+          });
+        }
+        cachedProgress = newProgress;
         setProgress(newProgress);
-        setMasteryPoints(totalPoints);
+      }, (error) => {
+        console.log("Progress listener error:", error);
       });
 
-    return () => unsubscribe();
+    // Listen to user doc for energyPoints and activeDates
+    const unsubscribeUser = firestore()
+      .collection('users')
+      .doc(user.uid)
+      .onSnapshot((doc) => {
+        if (doc && doc.data) {
+          const data = doc.data();
+          if (data) {
+            cachedMasteryPoints = data.energyPoints || 0;
+            setMasteryPoints(cachedMasteryPoints);
+          
+          // Calculate streak
+          const dates: string[] = data.activeDates || [];
+          if (dates.length > 0) {
+            const sorted = [...new Set(dates)].sort((a, b) => b.localeCompare(a));
+            const todayStr = new Date().toISOString().split('T')[0];
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            
+            if (sorted[0] !== todayStr && sorted[0] !== yesterdayStr) {
+              setStreak(0);
+            } else {
+              let currentStreak = 0;
+              let checkDate = new Date(sorted[0]);
+              for (let i = 0; i < sorted.length; i++) {
+                if (sorted[i] === checkDate.toISOString().split('T')[0]) {
+                  currentStreak++;
+                  checkDate.setDate(checkDate.getDate() - 1);
+                } else {
+                  break;
+                }
+              }
+              cachedStreak = currentStreak;
+              setStreak(currentStreak);
+            }
+          } else {
+            cachedStreak = 0;
+            setStreak(0);
+          }
+        }
+      }
+      }, (error) => {
+        console.log("User listener error:", error);
+      });
+
+    return () => {
+      unsubscribeProgress();
+      unsubscribeUser();
+    };
   }, [subjectStr]);
 
   const chaptersMap = BOOK_CHAPTERS[subjectStr] || BOOK_CHAPTERS['physics'];
@@ -120,16 +215,39 @@ export default function MasteryMap() {
       {/* Top App Bar */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color="#006d37" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>SabakTutor</Text>
+          <ChunkyButton 
+            onPress={() => router.replace('/subject-selection')}
+            color="#bfdbfe"
+            shadowColor="#60a5fa"
+            style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24 }}
+            textStyle={{ color: '#1e3a8a', fontSize: 16, marginLeft: 0 }}
+          >
+             <MaterialCommunityIcons name="menu-down" size={24} color="#1e3a8a" />
+             <Text style={{ color: '#1e3a8a', fontSize: 16, fontWeight: 'bold' }}>{subjectStr === 'physics' ? 'Physics' : 'Comp Sci'}</Text>
+          </ChunkyButton>
         </View>
-        <View style={styles.headerRight}>
-          <View style={styles.energyBadge}>
-            <MaterialIcons name="bolt" size={18} color="#6f5900" />
-            <Text style={styles.energyText}>{masteryPoints}</Text>
-          </View>
+        <View style={[styles.headerRight, { gap: 8 }]}>
+          <ChunkyButton 
+            onPress={() => router.push(`/streak?subject=${subjectStr}` as any)}
+            color="#fed7aa"
+            shadowColor="#f97316"
+            style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24 }}
+          >
+            <Animated.View style={animatedFireStyle}>
+              <MaterialCommunityIcons name="fire" size={28} color="#ea580c" />
+            </Animated.View>
+            <Text style={[styles.energyText, { color: '#9a3412', marginLeft: 4, fontSize: 18 }]}>{streak}</Text>
+          </ChunkyButton>
+
+          <ChunkyButton 
+            onPress={() => router.replace({ pathname: '/leaderboard', params: { subject: subjectStr } })}
+            color="#fed023"
+            shadowColor="#d4a300"
+            style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24 }}
+          >
+            <MaterialIcons name="bolt" size={28} color="#6f5900" />
+            <Text style={[styles.energyText, { marginLeft: 2, fontSize: 18 }]}>{masteryPoints}</Text>
+          </ChunkyButton>
         </View>
       </View>
 
@@ -191,11 +309,8 @@ export default function MasteryMap() {
           <Text style={[styles.navText, { color: '#006d37' }]}>Map</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem} disabled>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/leaderboard', params: { subject: subjectStr } })}>
           <MaterialIcons name="leaderboard" size={28} color="#bbcbbb" />
-          <View style={styles.comingSoonBadge}>
-            <Text style={styles.comingSoonText}>SOON</Text>
-          </View>
           <Text style={[styles.navText, { color: '#bbcbbb' }]}>Leaderboard</Text>
         </TouchableOpacity>
 
