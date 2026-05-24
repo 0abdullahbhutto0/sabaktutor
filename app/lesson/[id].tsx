@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Dimensions, TouchableOpacity, Animated, Platform, StatusBar, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Dimensions, TouchableOpacity, Animated, Platform, StatusBar as RNStatusBar, ScrollView, ActivityIndicator } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -136,6 +137,7 @@ export default function LessonScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialIcons name="close" size={24} color="#94A3B8" />
@@ -152,6 +154,7 @@ export default function LessonScreen() {
   if (isGenerating && !generationFailed && flashcards.length === 0) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={[styles.cardContainer, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="hourglass-empty" size={80} color="#94A3B8" />
           <Text style={styles.title}>Lesson Generating</Text>
@@ -169,6 +172,7 @@ export default function LessonScreen() {
   if (generationFailed || flashcards.length === 0) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <View style={[styles.cardContainer, { justifyContent: 'center', alignItems: 'center' }]}>
           <MaterialIcons name="error-outline" size={80} color="#EF4444" />
           <Text style={styles.title}>Generation Failed</Text>
@@ -208,6 +212,7 @@ export default function LessonScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <StatusBar style="light" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
@@ -275,7 +280,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#0F172A',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: 'row',

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, Image, StatusBar as RNStatusBar } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence, useAnimatedProps } from 'react-native-reanimated';
@@ -7,6 +8,8 @@ import Svg, { Rect } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import { BACKEND_URL } from './services/quizService';
+import Markdown from 'react-native-markdown-display';
+import { MathJaxSvg } from 'react-native-mathjax-html-to-svg';
 
 interface Message {
   id: string;
@@ -30,38 +33,56 @@ const ACTION_WORDS = [
 ];
 
 const FormattedText = ({ text, textStyle }: { text: string, textStyle: any }) => {
-  const lines = text.split('\n');
+  // Regex to match $$...$$, $...$, \[...\], \(...\)
+  const mathRegex = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g;
+  
+  const parts = text.split(mathRegex);
+
   return (
-    <View>
-      {lines.map((line, i) => {
-        const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ');
-        const isNumbered = /^\d+\.\s/.test(line.trim());
-        const isQuote = line.trim().startsWith('>');
+    <View style={{ flexDirection: 'column', width: '100%' }}>
+      {parts.map((part, index) => {
+        if (!part) return null;
         
-        // Remove markdown list chars for rendering
-        let cleanLine = line;
-        if (isBullet) cleanLine = cleanLine.replace(/^[-*]\s/, '');
-        if (isNumbered) cleanLine = cleanLine.replace(/^\d+\.\s/, '');
-        if (isQuote) cleanLine = cleanLine.replace(/^>\s*/, '');
-        
-        // Parse bold text
-        const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
-        
-        return (
-          <View key={i} style={{ flexDirection: 'row', marginBottom: line.trim() === '' ? 8 : 2, paddingLeft: isBullet || isNumbered || isQuote ? 16 : 0, borderLeftWidth: isQuote ? 2 : 0, borderLeftColor: isQuote ? '#3B82F6' : 'transparent' }}>
-            {isBullet && <Text style={[textStyle, { marginRight: 8 }]}>•</Text>}
-            {isNumbered && <Text style={[textStyle, { marginRight: 8 }]}>{line.trim().match(/^\d+\.\s/)?.[0]}</Text>}
-            
-            <Text style={[textStyle, isQuote && { fontStyle: 'italic', color: '#94A3B8' }, { flexShrink: 1 }]}>
-              {parts.map((p, j) => {
-                if (p.startsWith('**') && p.endsWith('**')) {
-                  return <Text key={j} style={{ fontWeight: 'bold', color: textStyle.color === '#FFFFFF' ? '#FFFFFF' : '#60A5FA' }}>{p.slice(2, -2)}</Text>;
-                }
-                return p;
-              })}
-            </Text>
-          </View>
-        );
+        // Check if this part is a math formula
+        const isMath = part.startsWith('$') || part.startsWith('\\(') || part.startsWith('\\[');
+
+        if (isMath) {
+          // Render Math
+          return (
+             <View key={index} style={{ marginVertical: 4, overflow: 'hidden' }}>
+                <MathJaxSvg fontSize={textStyle.fontSize || 16} color={textStyle.color || '#fff'} fontCache={true}>
+                  {part}
+                </MathJaxSvg>
+             </View>
+          );
+        } else {
+          // Render Markdown
+          return (
+            <Markdown 
+              key={index}
+              style={{
+                body: { ...textStyle, margin: 0, color: textStyle.color || '#FFF' },
+                text: { color: textStyle.color || '#FFF' },
+                span: { color: textStyle.color || '#FFF' },
+                heading1: { fontSize: 24, fontWeight: 'bold', marginVertical: 8, color: textStyle.color || '#FFF' },
+                heading2: { fontSize: 20, fontWeight: 'bold', marginVertical: 8, color: textStyle.color || '#FFF' },
+                heading3: { fontSize: 18, fontWeight: 'bold', marginVertical: 8, color: textStyle.color || '#FFF' },
+                paragraph: { ...textStyle, marginTop: 4, marginBottom: 4, color: textStyle.color || '#FFF' },
+                list_item: { ...textStyle, marginVertical: 2, color: textStyle.color || '#FFF' },
+                bullet_list: { marginVertical: 4, color: textStyle.color || '#FFF' },
+                ordered_list: { marginVertical: 4, color: textStyle.color || '#FFF' },
+                strong: { fontWeight: 'bold', color: textStyle.color === '#FFFFFF' ? '#FFFFFF' : '#60A5FA' },
+                em: { fontStyle: 'italic', color: textStyle.color || '#FFF' },
+                code_inline: { backgroundColor: 'rgba(255,255,255,0.1)', color: textStyle.color || '#FFF', paddingHorizontal: 4, borderRadius: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+                code_block: { backgroundColor: 'rgba(0,0,0,0.2)', color: textStyle.color || '#FFF', padding: 8, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', marginVertical: 8 },
+                fence: { backgroundColor: 'rgba(0,0,0,0.2)', color: textStyle.color || '#FFF', padding: 8, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', marginVertical: 8 },
+                blockquote: { borderLeftWidth: 2, borderLeftColor: '#60A5FA', paddingLeft: 12, fontStyle: 'italic', opacity: 0.8, color: textStyle.color || '#FFF' }
+              }}
+            >
+              {part}
+            </Markdown>
+          );
+        }
       })}
     </View>
   );
@@ -317,6 +338,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <StatusBar style="light" />
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -347,8 +369,17 @@ export default function ChatScreen() {
               ]}
             >
               {msg.role === 'assistant' && (
-                <View style={styles.avatarAssistant}>
-                  <MaterialIcons name="smart-toy" size={20} color="#FFF" />
+                <View style={[styles.avatarAssistant, { backgroundColor: 'transparent' }]}>
+                  <Image 
+                    source={
+                      idx === messages.length - 1 && isTyping
+                        ? require('../assets/images/thinking.png')
+                        : idx === messages.length - 1 && !isTyping
+                        ? require('../assets/images/happy.png')
+                        : require('../assets/images/sleeping.png')
+                    }
+                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                  />
                 </View>
               )}
               
@@ -405,7 +436,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#0F172A',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: 'row',
