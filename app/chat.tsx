@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence, useAnimatedProps } from 'react-native-reanimated';
 import Svg, { Rect } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -146,23 +147,27 @@ export default function ChatScreen() {
   const { subject } = useLocalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const insets = useSafeAreaInsets();
+  
+  const userId = auth().currentUser?.uid || 'guest';
+  const sessionKey = `${userId}_${book}`;
   
   const [messages, setMessages] = useState<Message[]>(
-    chatSessionStore[book]?.messages || [
+    chatSessionStore[sessionKey]?.messages || [
       { id: 'initial', role: 'assistant', content: `Hello! I'm your SabakTutor study buddy for ${subjectStr === 'physics' ? 'Physics' : 'Computer Science'}. What would you like to learn today?` }
     ]
   );
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [actionWord, setActionWord] = useState(ACTION_WORDS[0]);
-  const [previousSummary, setPreviousSummary] = useState<string>(chatSessionStore[book]?.previousSummary || '');
+  const [previousSummary, setPreviousSummary] = useState<string>(chatSessionStore[sessionKey]?.previousSummary || '');
   
   const scrollViewRef = useRef<ScrollView>(null);
   const actionWordInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    chatSessionStore[book] = { messages, previousSummary };
-  }, [messages, previousSummary, book]);
+    chatSessionStore[sessionKey] = { messages, previousSummary };
+  }, [messages, previousSummary, sessionKey]);
 
   useEffect(() => {
     if (isTyping) {
@@ -307,11 +312,11 @@ export default function ChatScreen() {
     setMessages(initial);
     setPreviousSummary('');
     setInput('');
-    chatSessionStore[book] = { messages: initial, previousSummary: '' };
+    chatSessionStore[sessionKey] = { messages: initial, previousSummary: '' };
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
