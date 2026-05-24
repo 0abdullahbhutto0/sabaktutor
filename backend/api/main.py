@@ -11,16 +11,19 @@ API:
 from typing import AsyncGenerator, List
 from contextlib import asynccontextmanager
 from pathlib import Path
-
+from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from quiz.descriptive_generator import DescriptiveQuiz
 from api.schemas import (
     AskRequest,
     SummarizeRequest,
     QuizGenerateRequest,
     QuizBackgroundGenerateRequest,
+    DescriptiveGenerateRequest,
+    DescriptiveEvaluateRequest,
 )
 from api.dependencies import get_services, Services
 from api.streaming import sse_stream
@@ -107,7 +110,7 @@ async def ask_stream(req: AskRequest, services: Services = Depends(get_services)
         raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
 
     async def token_generator() -> AsyncGenerator[str, None]:
-        async for token in services.ask_stream(req.query, req.history, req.previous_summary, max_results=10):
+        async for token in services.ask_stream(req.query, req.history, req.previous_summary, max_results=5):
             yield sse_stream("token", {"token": token})
         yield sse_stream("done", {"status": "complete"})
 
@@ -248,6 +251,142 @@ async def generate_interactive_background(
     background_tasks.add_task(background_interactive_generator, req, services)
     return {"status": "accepted", "message": "Interactive quiz generation started in background"}
 
+@app.post("/descriptive/generate/stream")
+async def generate_descriptive_stream(
+    req: DescriptiveGenerateRequest,
+    services: Services = Depends(get_services),
+):
+    """
+    Generate chapter-wise descriptive quiz.
+    Returns: 4 short (Section A, 3 marks each) + 1 long (Section C, 6 marks).
+    Total 18 marks.
+    """
+    try:
+        services.load_book(req.book_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
+
+    async def generator() -> AsyncGenerator[str, None]:
+        yield sse_stream("status", {
+            "message": "Generating chapter descriptive quiz (4 short + 1 long)...",
+            "step": 1,
+            "pattern_learning": True,
+        })
+
+        async for event in services.generate_descriptive_quiz(
+            chapter_id=req.chapter_id,
+            title = req.book_id + "_" + str(uuid4())
+        ):
+            if event["type"] == "token":
+                yield sse_stream("token", {"token": event["token"]})
+            elif event["type"] == "error":
+                yield sse_stream("error", {"message": event["message"]})
+            elif event["type"] == "done":
+                quiz = event["quiz"]
+                yield sse_stream("done", {
+                    "quiz": quiz.to_dict(),
+                    "title": quiz.title,
+                    "chapter_id": quiz.chapter_id,
+                    "section_b_count": len(quiz.section_b),
+                    "section_c_count": len(quiz.section_c),
+                    "total_marks": quiz.total_marks,
+                    "duration_minutes": quiz.duration_minutes,
+                    "instructions": quiz.instructions,
+                    "patterns_used": list(set(
+                        q.pattern_used for q in quiz.section_b + quiz.section_c if q.pattern_used
+                    )),
+                })
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/descriptive/evaluate/stream")
+async def evaluate_descriptive_stream(
+    req: DescriptiveEvaluateRequest,
+    services: Services = Depends(get_services),
+):
+    """
+    Evaluate ALL 5 descriptive answers together (batch evaluation).
+    Client passes back the FULL QUIZ (from generate response) + student answers.
+    """
+    try:
+        quiz = DescriptiveQuiz.from_dict(req.quiz.dict())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid quiz data: {str(e)}")
+
+    try:
+        services.load_book(req.quiz.book_id)
+    except Exception:
+        pass
+    
+    answer_map = {a.question_id: a.answer_text for a in req.answers}
+    all_questions = quiz.section_b + quiz.section_c
+    
+    ordered_answers = []
+    for q in all_questions:
+        ordered_answers.append(answer_map.get(q.id, ""))
+
+    async def generator() -> AsyncGenerator[str, None]:
+        yield sse_stream("status", {
+            "message": "Evaluating all 5 answers...",
+            "step": 1,
+            "batch_evaluation": True,
+        })
+
+        async for event in services.evaluate_descriptive_all(
+            quiz=quiz,
+            answers=ordered_answers,
+            time_taken_minutes=req.time_taken_minutes,
+        ):
+            if event["type"] == "token":
+                yield sse_stream("token", {"token": event["token"]})
+            elif event["type"] == "error":
+                yield sse_stream("error", {"message": event["message"]})
+            elif event["type"] == "done":
+                result = event["evaluation"]
+                
+                result_data = result.to_dict()
+                result_data["quiz_id"] = quiz.id
+                result_data["book_id"] = quiz.book_id
+                result_data["chapter_id"] = quiz.chapter_id
+                
+                try:
+                    # save_quiz_to_firestore(
+                    #     doc_id=f"desc_result_{quiz.id}",
+                    #     data=result_data,
+                    #     collection="descriptive_results"
+                    # )
+                    pass
+                except Exception as e:
+                    print(f"Firestore save error: {e}")
+                
+                yield sse_stream("done", {
+                    "evaluation": result.to_dict(),
+                    "total_marks_obtained": result.total_marks_obtained,
+                    "total_max_marks": result.total_max_marks,
+                    "percentage": result.percentage,
+                    "passed": result.passed,
+                    "overall_feedback": result.overall_feedback,
+                    "stored": True,
+                })
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @app.get("/health")
 async def health():
@@ -256,7 +395,7 @@ async def health():
 @app.post("/debug/search")
 def debug_search(req: AskRequest, services: Services = Depends(get_services)):
     services.load_book(req.book_id)
-    results = services.search(req.query, max_results=10)
+    results = services.search(req.query, max_results=5)
     return {
         "query": req.query,
         "results": [
@@ -265,7 +404,8 @@ def debug_search(req: AskRequest, services: Services = Depends(get_services)):
                 "title": r.get("title"),
                 "score": r.get("score"),
                 "source": r.get("source"),
-                "content_preview": r.get("content", "")[:200],
+                "content_preview": r.get("content", ""),
+                "start_index": r.get("start_index",0),
                 "path": r.get("path"),
             }
             for r in results

@@ -113,8 +113,8 @@ class BookManager:
                 node_id = n.get("node_id") or str(uuid.uuid4())[:8]
                 content = n.get("text") or n.get("content", "")
                 title = n.get("title", "")
-                start_index = n.get('start_index',0)
-                end_index = n.get('end_index',0)
+                start_index = n.get('start_index')
+                end_index = n.get('end_index')
                 children = n.get("nodes", [])
 
                 if str(node_id) in ("0", "0000"):

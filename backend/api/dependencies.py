@@ -5,7 +5,7 @@ Loads config from .env file.
 """
 
 import os
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator,List
 from dotenv import load_dotenv
 
 from core.book_manager import BookManager
@@ -14,11 +14,12 @@ from core.streaming_client import StreamingLLMClient
 from core.embeddings import EmbeddingManager
 from api.prompts import Prompts
 from core.hybrid_search import SearchOptions
+from quiz.descriptive_generator import DescriptiveQuizGenerator,DescriptiveQuiz
 
 load_dotenv()
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/owl-alpha")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "arcee-ai/trinity-large-thinking:free")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/llama-nemotron-embed-vl-1b-v2:free")
 
 VECTOR_INDEX_DIR = os.getenv("VECTOR_INDEX_DIR", "./vector_index")
@@ -36,6 +37,7 @@ class Services:
         self._active_engine = None
         self._active_tree = None
         self._active_book_title = None
+        self._descriptive_generator = None
         self._prompts = Prompts()
 
     @property
@@ -88,14 +90,14 @@ class Services:
         self._active_tree = book_data["tree"]
         self._active_book_title = book_data["metadata"].title
 
-    def search(self, query: str, max_results: int = 10):
+    def search(self, query: str, max_results: int = 5):
         if self._active_engine is None:
             raise RuntimeError("No book loaded")
         options = SearchOptions(max_results=max_results)
         response = self._active_engine.search(query, options)
         return response.results
 
-    async def ask_stream(self, query: str, history: list = None, previous_summary: str = None, max_results: int = 10) -> AsyncGenerator[str, None]:
+    async def ask_stream(self, query: str, history: list = None, previous_summary: str = None, max_results: int = 5) -> AsyncGenerator[str, None]:
         """Async streaming ask with custom prompts."""
         results = self.search(query, max_results)
         if not results:
@@ -103,7 +105,7 @@ class Services:
             return
 
         context = "\n\n".join(
-            f"Source: {r.get('title', 'Untitled')}\n{r.get('content', '')}\n{r.get('start_index',0)}"
+            f"Source: {r.get('title', 'Untitled')}\n{r.get('content', '')}\nPage:{r.get('start_index')}"
             for r in results
         )
         book_title = self._active_book_title or ""
@@ -160,6 +162,44 @@ class Services:
         if self._embedding_manager:
             self._embedding_manager.close()
 
+    @property
+    def descriptive_generator(self):
+        if self._descriptive_generator is None:
+            self._descriptive_generator = DescriptiveQuizGenerator(
+                api_key=OPENROUTER_KEY,
+                model=OPENROUTER_MODEL,
+            )
+        return self._descriptive_generator
+
+
+    async def generate_descriptive_quiz(self, chapter_id: str, **kwargs):
+        """Generate chapter-wise descriptive quiz (4 short + 1 long)."""
+        if self._active_tree is None:
+            raise RuntimeError("No book loaded.")
+        async for event in self.descriptive_generator.generate_streaming(
+            document_tree=self._active_tree,
+            chapter_id=chapter_id,
+            book_id=self._active_book_id or "",
+            **kwargs
+        ):
+            yield event
+
+    async def evaluate_descriptive_all(
+        self,
+        quiz: DescriptiveQuiz,
+        answers: List[str],
+        time_taken_minutes: Optional[int] = None,
+    ):
+        """Evaluate all 5 descriptive answers together. Quiz passed from client."""
+        all_questions = quiz.section_b + quiz.section_c
+        async for event in self.descriptive_generator.evaluate_all_streaming(
+            questions=all_questions,
+            answers=answers,
+            quiz_id=quiz.id,
+            book_id=self._active_book_id or "",
+            time_taken_minutes=time_taken_minutes,
+        ):
+            yield event
 
 _services_instance: Optional[Services] = None
 

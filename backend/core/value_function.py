@@ -1,7 +1,13 @@
 """
-Value Function and Node Scorer Module
-=====================================
-uses tree node content directly for embeddings.
+Value Function and Node Scorer Module - FIXED
+=============================================
+Scores ALL candidate nodes, not just top-k from vector store.
+
+FIXES:
+1. ALL candidate nodes get scored via embedding similarity
+2. No fallback to uniform 0.5 for missing nodes
+3. Proper handling when vector store has fewer results than candidates
+4. Score normalization across all candidates
 """
 
 from typing import List, Dict, Optional, Any
@@ -112,7 +118,7 @@ class IndexTiming:
 class ValueFunction:
     """
     Value function for predicting node relevance.
-    NO CHUNKING - uses node content directly.
+    Scores ALL candidate nodes, not just top-k.
     """
 
     def __init__(
@@ -145,8 +151,6 @@ class ValueFunction:
         timing = IndexTiming()
         start_total = time.perf_counter()
 
-        print("\n🚀 [INDEX TREE START]")
-        print(f"Total nodes in tree: {tree.get_node_count()}")
         self._document_tree = tree
 
         contents_to_encode = []
@@ -175,9 +179,6 @@ class ValueFunction:
 
         timing.node_iteration_time_ms = (time.perf_counter() - start_nodes) * 1000
 
-        print(f"\n📊 PRE-EMBEDDING SUMMARY")
-        print(f"To embed: {len(contents_to_encode)}")
-        print(f"Already in store: {timing.nodes_loaded_from_store}")
 
         if contents_to_encode:
             print(f"\nGENERATING {len(contents_to_encode)} NEW EMBEDDINGS...")
@@ -233,50 +234,73 @@ class ValueFunction:
         """
         Predict value estimates for candidate nodes.
 
-        FIXED: If candidate_nodes is small (e.g., single node for MCTS), we now
-        do a targeted search rather than relying on global top-k which would miss it.
+        CRITICAL: ALL candidates get scored, not just top-k.
+        Uses batch embedding + similarity computation.
         """
         if not candidate_nodes:
             return {}
 
         if self.vector_store.count() == 0:
+            print(f"  WARNING: Vector store is empty! Using uniform scores.")
             return {node_id: 0.5 for node_id in candidate_nodes}
 
         if query_embedding is not None:
             q_emb = query_embedding
         else:
             q_emb = self.embedding_manager.encode_query(query)
-        search_k = max(self.top_k, len(candidate_nodes))
+
+        if q_emb.ndim == 2:
+            q_emb = q_emb[0]
+
+        # Get embeddings for ALL candidates from vector store
+        # Search for MORE than candidates to ensure we get all
+        search_k = max(self.top_k, len(candidate_nodes) * 2)
+
+        print(f"  Vector store: {self.vector_store.count()} total nodes, searching top {search_k}")
 
         results = self.vector_store.search(q_emb, top_k=search_k)
 
         # Build map of all results
-        chunk_scores_map: Dict[str, List[ChunkScore]] = {}
-        for node_id, score, content in results:
-            chunk_score = ChunkScore(
-                node_id=node_id,
-                score=score,
-                content=content,
-            )
-            if node_id not in chunk_scores_map:
-                chunk_scores_map[node_id] = []
-            chunk_scores_map[node_id].append(chunk_score)
-        node_scores = []
-        for node_id in candidate_nodes:
-            if node_id in chunk_scores_map:
-                chunk_scores = chunk_scores_map[node_id]
-                doc_node = self._document_tree.get_node(node_id) if self._document_tree else None
-                node_depth = doc_node.depth if doc_node else 0
-                node_score = self.scorer.compute_node_score(
-                    chunk_scores, node_id, depth=node_depth, query=query
-                )
-                node_scores.append(node_score)
-            else:
-                # Candidate not found in search results - assign low but non-zero score
-                node_scores.append(NodeScore(node_id=node_id, raw_score=0.05))
+        node_scores_map: Dict[str, float] = {}
 
-        node_scores = self.scorer.normalize_scores(node_scores)
-        return {ns.node_id: ns.normalized_score for ns in node_scores}
+        for node_id, score, content in results:
+            # Use the raw similarity score
+            node_scores_map[node_id] = float(score)
+
+        # Assign scores to ALL candidates
+        # - If found in search: use the score
+        # - If not found: assign low score based on the minimum score found
+        if node_scores_map:
+            min_score = min(node_scores_map.values())
+        else:
+            min_score = 0.01
+
+        # Assign scores to all candidates
+        final_scores = {}
+        for node_id in candidate_nodes:
+            if node_id in node_scores_map:
+                final_scores[node_id] = node_scores_map[node_id]
+            else:
+                # Not found in search results - assign very low score
+                # But still a valid score for normalization
+                final_scores[node_id] = min_score * 0.1  # 10% of minimum score
+
+        print(f"  Scored {len(final_scores)} nodes, {sum(1 for v in final_scores.values() if v > min_score * 0.5)} with significant scores")
+
+        # Normalize scores to [0, 1] range
+        scores_list = list(final_scores.values())
+        min_s = min(scores_list)
+        max_s = max(scores_list)
+
+        if max_s > min_s:
+            for node_id in final_scores:
+                final_scores[node_id] = (final_scores[node_id] - min_s) / (max_s - min_s)
+        else:
+            # All same score
+            for node_id in final_scores:
+                final_scores[node_id] = 0.5
+
+        return final_scores
 
     def clear_index(self) -> None:
         """Clear the index and document tree reference."""

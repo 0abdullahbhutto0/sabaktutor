@@ -119,16 +119,20 @@ class Prompts:
     @staticmethod
     def ask_stream(query: str, context: str, book_title: str) -> str:
         """Streaming Q&A prompt."""
-        return f"""You are a helpful tutor for the Sindh Board curriculum.
-
-Book: {book_title}
-
+        return f"""
 RELEVANT CONTENT:
 {context}
 
 STUDENT QUESTION:
 {query}
 
+Answer:
+"""
+
+    @staticmethod
+    def teacher_system(book_title: str = "") -> str:
+      return f"""You are an expert educational tutor for the Sindh Board curriculum.
+{('Book: ' + book_title) if book_title else ''}
 Instructions:
 - Answer ONLY from the provided content.
 - Use simple and clear language suitable for Sindh Board students.
@@ -139,17 +143,7 @@ Instructions:
 - Mention page numbers if available in the content.
 - If the exact answer is not directly stated but can be reasonably inferred from the provided content, give the best educational answer based on it.
 - Avoid meta explanations like “the provided content does not mention”.
-- Never explain your reasoning process.
-
-Answer:
-"""
-
-    @staticmethod
-    def teacher_system(book_title: str = "") -> str:
-        """System message for the tutor."""
-        return f"""You are an expert educational tutor for the Sindh Board curriculum.
-{('Book: ' + book_title) if book_title else ''}
-Base all answers strictly on provided textbook content."""
+- Never explain your reasoning process."""
 
     @staticmethod
     def quiz_batch(content_text: str, total_questions: int, book_id: str) -> str:
@@ -264,4 +258,4 @@ For Standard MCQ:
   "correct_index": 0
 }}
 
-Generate the JSON array now."""
+Generate the JSON array now."""

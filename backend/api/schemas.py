@@ -4,11 +4,9 @@ Pydantic Schemas for API Request/Response Models
 Streaming-only API. All responses use SSE.
 """
 
-from typing import List, Optional
+from typing import List, Optional,Dict,Any
 from pydantic import BaseModel, Field
 
-
-from typing import List, Optional, Dict
 
 class AskRequest(BaseModel):
     book_id: str
@@ -45,3 +43,47 @@ class StreamEvent(BaseModel):
 class QuizBackgroundGenerateRequest(QuizGenerateRequest):
     user_id: str
     level_id: str
+
+class DescriptiveQuestionData(BaseModel):
+    """Single question structure — what generator returns."""
+    id: str 
+    type: str = "short_answer"  # short_answer | numerical | long_answer | derivation | law_proof
+    stem: str
+    marks: int
+    topic: str = ""
+    expected_points: List[str] = Field(default_factory=list)
+    rubric: str = ""
+    correct_answer: str = ""       # For numericals only
+    formula_used: str = ""           # For numericals only
+    source_node_id: str = ""
+    pattern_used: str = ""
+
+
+class DescriptiveGenerateRequest(BaseModel):
+    """Generate chapter-wise descriptive quiz."""
+    book_id: str
+    chapter_id: str
+    title: Optional[str] = None
+
+
+class DescriptiveAnswerItem(BaseModel):
+    """Single answer from student."""
+    question_id: str
+    answer_text: str
+
+
+class DescriptiveQuizData(BaseModel):
+    """Quiz data passed back from client for evaluation."""
+    quiz_id: str
+    book_id: str
+    chapter_id: str
+    title: str = ""
+    section_b: List[DescriptiveQuestionData] = Field(default_factory=list) 
+    section_c: List[DescriptiveQuestionData] = Field(default_factory=list)  
+    total_marks: int = 15
+
+
+class DescriptiveEvaluateRequest(BaseModel):
+    quiz: DescriptiveQuizData
+    answers: List[DescriptiveAnswerItem]
+    time_taken_minutes: Optional[int] = None
