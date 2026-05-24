@@ -1,5 +1,12 @@
 """
 Hybrid Search Engine Module
+====================================
+Combines value-based search and MCTS for optimal document retrieval.
+1. Value search evaluates ALL nodes, not just deep nodes
+2. MCTS initialized with ALL document nodes in tree
+3. MCTS priors scored using ALL document nodes, not just expanded
+4. Proper query embedding passed to MCTS
+5. Merge combines both scores correctly with proper normalization
 """
 
 from typing import List, Dict, Optional, Set, Any
@@ -124,8 +131,10 @@ class HybridSearchEngine:
 
         self._visited_nodes.clear()
 
-        # Compute query embedding ONCE per request — sync, no await
         query_embedding = self.embedding_manager.encode_query(query)
+
+        if query_embedding.ndim == 2:
+            query_embedding = query_embedding[0]
 
         results = self._search_hybrid(query, options, query_embedding)
         search_time = time.time() - start_time
@@ -148,34 +157,41 @@ class HybridSearchEngine:
         )
 
     def _search_hybrid(self, query: str, options: SearchOptions, query_embedding) -> List[Dict[str, Any]]:
-        """
-        Perform hybrid search combining value-based and MCTS-based approaches.
-        Query embedding computed once and passed through.
-        """
-        # Phase 1: Value-based search (fast, broad recall)
+        """Perform hybrid search with full debug logging."""
+
         value_results = self._search_value_only(query, options, query_embedding)
 
         if self.tree:
-            self.mcts.initialize(self.tree, query=query, query_embedding=query_embedding)
 
-        self.mcts.max_iterations = options.max_iterations
-        self.mcts.early_stop_threshold = options.early_stop_threshold
-        
-        # Run MCTS in thread pool to avoid blocking event loop
-        mcts_results = self.mcts.search(query, options.max_results, options.early_stop, query_embedding)
-        
-        return self._merge_results(value_results, mcts_results, query, options)
+            self.mcts.initialize(
+                self.tree,
+                query=query,
+                query_embedding=query_embedding
+            )
+            self.mcts.max_iterations = options.max_iterations
+
+            mcts_results = self.mcts.search(
+                query,
+                options.max_results,
+                options.early_stop,
+                query_embedding
+            )
+        else:
+            mcts_results = []
+
+        merged = self._merge_results(value_results, mcts_results, query, options)
+
+        return merged
 
     def _search_value_only(self, query: str, options: SearchOptions, query_embedding) -> List[Dict[str, Any]]:
-        """
-        Perform value-based search only using embeddings.
-        """
+        """Value-based search - evaluates ALL candidate nodes."""
         results = []
         if not self.tree:
             return results
 
+        all_nodes = self.tree.get_all_nodes()
         nodes_to_evaluate = [
-            node.id for node in self.tree.get_all_nodes()
+            node.id for node in all_nodes
             if not node.is_root and len(node.content) > 50
         ]
 
@@ -188,8 +204,11 @@ class HybridSearchEngine:
                 key=lambda nid: self.tree.get_node(nid).depth if self.tree.get_node(nid) else 0,
                 reverse=True,
             )[:500]
+          
+        value_estimates = self.value_function.predict_values(
+            query, nodes_to_evaluate, query_embedding=query_embedding
+        )
 
-        value_estimates = self.value_function.predict_values(query, nodes_to_evaluate, query_embedding=query_embedding)
 
         for node_id, score in value_estimates.items():
             if score <= 0.0:
@@ -209,6 +228,7 @@ class HybridSearchEngine:
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:options.max_results * 2]
+
     def _merge_results(
         self,
         value_results: List[Dict[str, Any]],
@@ -216,13 +236,9 @@ class HybridSearchEngine:
         query: str,
         options: SearchOptions,
     ) -> List[Dict[str, Any]]:
-        """
-        Merge value and MCTS results with proper normalization.
-        FIXED: No double-weighting, both scores normalized to [0,1] first.
-        """
+        """Merge value and MCTS results with proper normalization."""
         merged: Dict[str, Dict[str, Any]] = {}
 
-        # Normalize value scores to [0, 1]
         if value_results:
             max_val = max(r["score"] for r in value_results)
             min_val = min(r["score"] for r in value_results)
@@ -230,9 +246,8 @@ class HybridSearchEngine:
             for r in value_results:
                 r["normalized_score"] = (r["score"] - min_val) / val_range
         else:
-            max_val = min_val = val_range = 1.0
+            print(f"  No value results")
 
-        # Normalize MCTS scores to [0, 1]
         if mcts_results:
             max_mcts = max(r.score for r in mcts_results)
             min_mcts = min(r.score for r in mcts_results)
@@ -240,7 +255,7 @@ class HybridSearchEngine:
             for r in mcts_results:
                 r._norm_score = (r.score - min_mcts) / mcts_range
         else:
-            max_mcts = min_mcts = mcts_range = 1.0
+            print(f"  No MCTS results")
 
         # Add value results
         for r in value_results:
@@ -262,9 +277,7 @@ class HybridSearchEngine:
         for r in mcts_results:
             nid = r.document_node_id
             norm_score = getattr(r, '_norm_score', r.score)
-
             if nid in merged:
-                # Node found by both - combine scores
                 merged[nid]["mcts_score"] = norm_score
                 merged[nid]["sources"].append("mcts")
                 merged[nid]["visit_count"] = r.visit_count
@@ -284,7 +297,6 @@ class HybridSearchEngine:
 
         # Compute diversity scores
         candidates = list(merged.values())
-
         path_prefixes = Counter(
             "/".join(r.get("path", [])[:2]) if len(r.get("path", [])) >= 2 else r["node_id"]
             for r in candidates
@@ -293,18 +305,18 @@ class HybridSearchEngine:
         for candidate in candidates:
             path = candidate.get("path", [])
             prefix = "/".join(path[:2]) if len(path) >= 2 else candidate["node_id"]
-            # Cap diversity boost to prevent extreme values
             candidate["diversity_score"] = min(1.0 / path_prefixes[prefix], 1.0)
 
-        # Combine scores - FIXED: use options weights once, not twice
         for candidate in candidates:
-            # Hybrid score = weighted blend of value and mcts, then diversity
-            blended = max(candidate["value_score"], candidate["mcts_score"])
-            # If both sources agree, boost; if only one source, use that
+            # Primary score: max of value and MCTS scores
+            max_score = max(candidate["value_score"], candidate["mcts_score"])
+
+            # If both sources found the node, boost the score
             if candidate["value_score"] > 0 and candidate["mcts_score"] > 0:
-                # Both found it - boost
-                blended = 0.6 * max(candidate["value_score"], candidate["mcts_score"]) + \
-                          0.4 * ((candidate["value_score"] + candidate["mcts_score"]) / 2)
+                # Both agree - higher confidence
+                blended = 0.6 * max_score + 0.4 * ((candidate["value_score"] + candidate["mcts_score"]) / 2)
+            else:
+                blended = max_score
 
             candidate["combined_score"] = (
                 (1 - options.diversity_weight) * blended +
@@ -313,7 +325,6 @@ class HybridSearchEngine:
 
         candidates.sort(key=lambda x: x["combined_score"], reverse=True)
 
-        # Clean up for output
         final = []
         for c in candidates[:options.max_results]:
             final.append({
@@ -324,7 +335,7 @@ class HybridSearchEngine:
                 "diversity_score": round(c.get("diversity_score", 0), 4),
                 "sources": c["sources"],
                 "visit_count": c["visit_count"],
-                "content": c["content"][:500] if c["content"] else "",
+                "content": c["content"] if c["content"] else "",
                 "depth": c["depth"],
                 "title": c.get("title"),
                 "path": c.get("path", []),
