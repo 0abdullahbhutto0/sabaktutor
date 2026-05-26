@@ -1,13 +1,20 @@
-import { Tabs, useLocalSearchParams } from 'expo-router';
+import { withLayoutContext } from 'expo-router';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { BOOK_CHAPTERS } from '../services/quizService';
 
+const { Navigator } = createMaterialTopTabNavigator();
+const MaterialTopTabs = withLayoutContext(Navigator);
+
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
   const { subject } = useLocalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
@@ -91,23 +98,27 @@ export default function TabLayout() {
   });
 
   return (
-    <Tabs
+    <MaterialTopTabs
+      tabBarPosition="bottom"
       screenOptions={{
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
+        swipeEnabled: true,
+        tabBarShowIcon: true,
+        tabBarShowLabel: true,
+        tabBarStyle: [styles.tabBar, { paddingBottom: insets.bottom + 8 }],
         tabBarActiveTintColor: '#006d37',
         tabBarInactiveTintColor: '#bbcbbb',
         tabBarLabelStyle: styles.tabBarLabel,
         tabBarItemStyle: { paddingVertical: 4 },
+        tabBarIndicatorStyle: { height: 0 }, // Hide top tab indicator
       }}>
-      <Tabs.Screen
+      <MaterialTopTabs.Screen
         name="quiz-selection"
         options={{
           title: 'Map',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="map-marker-path" size={28} color={color} />,
         }}
       />
-      <Tabs.Screen
+      <MaterialTopTabs.Screen
         name="mock-exams"
         options={{
           title: 'Exams',
@@ -121,27 +132,21 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
+      <MaterialTopTabs.Screen
         name="leaderboard"
         options={{
           title: 'Leaderboard',
           tabBarIcon: ({ color }) => <MaterialIcons name="leaderboard" size={28} color={color} />,
         }}
       />
-      <Tabs.Screen
+      <MaterialTopTabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }) => <MaterialIcons name="person" size={28} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="streak"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-    </Tabs>
+    </MaterialTopTabs>
   );
 }
 
@@ -150,9 +155,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 2,
     borderTopColor: '#e3efff',
-    height: 80,
     paddingTop: 8,
-    paddingBottom: 24,
     elevation: 0,
     shadowOpacity: 0,
   },

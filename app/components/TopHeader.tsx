@@ -160,12 +160,7 @@ export default function TopHeader({ subjectStr }: { subjectStr: string }) {
         </ChunkyButton>
 
         <ChunkyButton
-          onPress={() =>
-            router.replace({
-              pathname: "/leaderboard",
-              params: { subject: subjectStr },
-            })
-          }
+          onPress={() => router.push(`/leaderboard?subject=${subjectStr}` as any)}
           color="#fed023"
           shadowColor="#d4a300"
           chunky

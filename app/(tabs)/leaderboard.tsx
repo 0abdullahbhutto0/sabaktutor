@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity } from 'react-native';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useRouter, useGlobalSearchParams, Stack } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -14,7 +14,7 @@ interface UserData {
 
 export default function Leaderboard() {
   const router = useRouter();
-  const { subject } = useLocalSearchParams<{ subject?: string }>();
+  const { subject } = useGlobalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   
   const [users, setUsers] = useState<UserData[]>([]);
