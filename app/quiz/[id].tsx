@@ -270,7 +270,13 @@ export default function QuizScreen() {
             <Text style={styles.resultsScore}>You scored {score} out of {questions.length}</Text>
             <ChunkyButton 
               title="Back to Map" 
-              onPress={() => router.back()}
+              onPress={() => {
+                if (passed) {
+                  router.replace({ pathname: '/quiz-selection', params: { subject: subjectStr, completedChapter: quizId } });
+                } else {
+                  router.back();
+                }
+              }}
               style={styles.primaryButton}
             />
           </View>
