@@ -44,10 +44,10 @@ export default function RootLayout() {
       <Stack.Screen name="login" options={{ headerTitle: 'Login', headerBackTitle: 'Back' }} />
       <Stack.Screen name="grade-selection" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="subject-selection" options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="quiz-selection" options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="profile" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="lesson/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="descriptive-quiz/[id]" options={{ headerShown: false }} />
       </Stack>
     </>
   );

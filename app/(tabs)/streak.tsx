@@ -148,23 +148,6 @@ export default function StreakScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/quiz-selection', params: { subject: subjectStr } })}>
-          <MaterialCommunityIcons name="map-marker-path" size={28} color="#bbcbbb" />
-          <Text style={[styles.navText, { color: '#bbcbbb' }]}>Map</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/leaderboard', params: { subject: subjectStr } })}>
-          <MaterialIcons name="leaderboard" size={28} color="#bbcbbb" />
-          <Text style={[styles.navText, { color: '#bbcbbb' }]}>Leaderboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/profile', params: { subject: subjectStr } })}>
-          <MaterialIcons name="person" size={28} color="#bbcbbb" />
-          <Text style={[styles.navText, { color: '#bbcbbb' }]}>Profile</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }

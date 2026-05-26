@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'r
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
-import ChunkyButton from './components/ChunkyButton';
+import ChunkyButton from '../components/ChunkyButton';
 
 export default function Profile() {
   const router = useRouter();
@@ -42,23 +42,6 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/quiz-selection', params: { subject: subjectStr } })}>
-          <MaterialCommunityIcons name="map-marker-path" size={28} color="#bbcbbb" />
-          <Text style={[styles.navText, { color: '#bbcbbb' }]}>Map</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace({ pathname: '/leaderboard', params: { subject: subjectStr } })}>
-          <MaterialIcons name="leaderboard" size={28} color="#bbcbbb" />
-          <Text style={[styles.navText, { color: '#bbcbbb' }]}>Leaderboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem}>
-          <MaterialIcons name="person" size={28} color="#006d37" />
-          <Text style={[styles.navText, { color: '#006d37' }]}>Profile</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
