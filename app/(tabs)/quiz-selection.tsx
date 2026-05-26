@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useGlobalSearchParams } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
   Dimensions,
@@ -112,7 +112,7 @@ let currentUserCacheId: string = "";
 
 export default function MasteryMap() {
   const router = useRouter();
-  const { subject, completedChapter } = useLocalSearchParams<{ subject?: string; completedChapter?: string }>();
+  const { subject, completedChapter } = useGlobalSearchParams<{ subject?: string; completedChapter?: string }>();
   const subjectStr = subject || "physics";
   const bookId = subjectStr === "physics" ? "phy_9" : "cs_9";
 

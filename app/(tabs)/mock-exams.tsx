@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Dimensions, Image } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet, SafeAreaView, Dimensions, Image, TouchableOpacity } from 'react-native';
+import { ScrollView, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useRouter, useGlobalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -14,7 +15,7 @@ const CARD_MARGIN = width * 0.1;
 
 export default function MockExams() {
   const router = useRouter();
-  const { subject } = useLocalSearchParams<{ subject?: string }>();
+  const { subject } = useGlobalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
@@ -76,84 +77,87 @@ export default function MockExams() {
   }, [exams]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <TopHeader subjectStr={subjectStr} />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
+        <TopHeader subjectStr={subjectStr} />
 
-      <View style={styles.content}>
-        <Text style={styles.subtitle}>
-          Test your deep understanding! Only available for chapters where you have mastered the Quest.
-        </Text>
-        <ScrollView 
-          horizontal 
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          snapToInterval={width}
-          decelerationRate="fast"
-        >
-          {exams.map((exam, index) => (
-            <View key={exam.id} style={{ width, alignItems: 'center', justifyContent: 'center' }}>
-              <View style={[styles.card, !exam.isUnlocked && styles.cardLocked, exam.isCompleted && styles.cardCompleted]}>
-                
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.chapterNumber, !exam.isUnlocked && { color: '#94a3b8' }]}>
-                    Chapter {exam.chapterNum}
+        <View style={styles.content}>
+          <Text style={styles.subtitle}>
+            Test your deep understanding! Only available for chapters where you have mastered the Quest.
+          </Text>
+          <ScrollView 
+            horizontal 
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            snapToInterval={width}
+            decelerationRate="fast"
+          >
+            {exams.map((exam, index) => (
+              <View key={exam.id} style={{ width, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={[styles.card, !exam.isUnlocked && styles.cardLocked, exam.isCompleted && styles.cardCompleted]}>
+                  
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.chapterNumber, !exam.isUnlocked && { color: '#94a3b8' }]}>
+                      Chapter {exam.chapterNum}
+                    </Text>
+                    {exam.isCompleted ? (
+                      <View style={styles.badgeCompleted}>
+                        <MaterialIcons name="check-circle" size={14} color="#059669" />
+                        <Text style={styles.badgeTextCompleted}>Passed</Text>
+                      </View>
+                    ) : exam.isUnlocked ? (
+                      <View style={styles.badgeUnlocked}>
+                        <MaterialCommunityIcons name="star-shooting" size={14} color="#d97706" />
+                        <Text style={styles.badgeTextUnlocked}>New</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.badgeLocked}>
+                        <MaterialIcons name="lock" size={14} color="#64748b" />
+                        <Text style={styles.badgeTextLocked}>Locked</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Text style={[styles.cardTitle, !exam.isUnlocked && { color: '#64748b' }]} numberOfLines={2}>
+                    {exam.title}
                   </Text>
-                  {exam.isCompleted ? (
-                    <View style={styles.badgeCompleted}>
-                      <MaterialIcons name="check-circle" size={14} color="#059669" />
-                      <Text style={styles.badgeTextCompleted}>Passed</Text>
-                    </View>
-                  ) : exam.isUnlocked ? (
-                    <View style={styles.badgeUnlocked}>
-                      <MaterialCommunityIcons name="star-shooting" size={14} color="#d97706" />
-                      <Text style={styles.badgeTextUnlocked}>New</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.badgeLocked}>
-                      <MaterialIcons name="lock" size={14} color="#64748b" />
-                      <Text style={styles.badgeTextLocked}>Locked</Text>
-                    </View>
-                  )}
-                </View>
 
-                <Text style={[styles.cardTitle, !exam.isUnlocked && { color: '#64748b' }]} numberOfLines={2}>
-                  {exam.title}
-                </Text>
+                  <View style={styles.cardBody}>
+                    {exam.isUnlocked ? (
+                      <Text style={styles.cardDesc}>
+                        Take a comprehensive descriptive exam evaluated by SabakTutor's advanced AI.
+                      </Text>
+                    ) : (
+                      <Text style={[styles.cardDesc, { color: '#94a3b8' }]}>
+                        Complete the Lesson and Quest for Chapter {exam.chapterNum} on the Map to unlock this exam.
+                      </Text>
+                    )}
+                  </View>
 
-                <View style={styles.cardBody}>
-                  {exam.isUnlocked ? (
-                    <Text style={styles.cardDesc}>
-                      Take a comprehensive descriptive exam evaluated by SabakTutor's advanced AI.
-                    </Text>
-                  ) : (
-                    <Text style={[styles.cardDesc, { color: '#94a3b8' }]}>
-                      Complete the Lesson and Quest for Chapter {exam.chapterNum} on the Map to unlock this exam.
-                    </Text>
-                  )}
-                </View>
+                  <View style={styles.cardFooter}>
+                    <ChunkyButton
+                      title={exam.isCompleted ? "Retake Exam" : exam.isUnlocked ? "Start Exam" : "Locked"}
+                      disabled={!exam.isUnlocked}
+                      onPress={() => {
+                        if (exam.isUnlocked) {
+                          router.push(`/descriptive-quiz/${exam.id}?subject=${subjectStr}` as any);
+                        }
+                      }}
+                      color={exam.isCompleted ? '#10b981' : exam.isUnlocked ? '#f59e0b' : '#cbd5e1'}
+                      shadowColor={exam.isCompleted ? '#059669' : exam.isUnlocked ? '#d97706' : '#94a3b8'}
+                      textStyle={{ fontSize: 16 }}
+                      style={{ width: '100%' }}
+                    />
+                  </View>
 
-                <View style={styles.cardFooter}>
-                  <ChunkyButton
-                    title={exam.isCompleted ? "Retake Exam" : exam.isUnlocked ? "Start Exam" : "Locked"}
-                    disabled={!exam.isUnlocked}
-                    onPress={() => {
-                      if (exam.isUnlocked) {
-                        router.push(`/descriptive-quiz/${exam.id}?subject=${subjectStr}` as any);
-                      }
-                    }}
-                    color={!exam.isUnlocked ? "#cbd5e1" : exam.isCompleted ? "#d1fae5" : "#3b82f6"}
-                    shadowColor={!exam.isUnlocked ? "#94a3b8" : exam.isCompleted ? "#059669" : "#2563eb"}
-                    textStyle={{ color: !exam.isUnlocked ? '#64748b' : exam.isCompleted ? '#065f46' : '#ffffff' }}
-                  />
                 </View>
               </View>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-
-    </SafeAreaView>
+            ))}
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 

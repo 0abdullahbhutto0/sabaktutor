@@ -2,6 +2,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function RootLayout() {
   const [initializing, setInitializing] = useState(true);
@@ -36,7 +37,7 @@ export default function RootLayout() {
   if (initializing) return null;
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="dark" />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false, gestureEnabled: false }} />
@@ -49,6 +50,6 @@ export default function RootLayout() {
       <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="descriptive-quiz/[id]" options={{ headerShown: false }} />
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }
