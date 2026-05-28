@@ -14,7 +14,7 @@ class EmbeddingConfig:
 
     model_name: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384
-    batch_size: int = 32
+    batch_size: int = 64
     max_seq_length: int = 512
     device: str = "cpu"
     normalize_embeddings: bool = True

@@ -1,9 +1,9 @@
 """
-Custom Prompts for LLM Interactions - OPTIMIZED
+Custom Prompts for LLM Interactions
 ================================================
-40% token reduction. JSON schema at end for recency bias.
-Pattern summaries instead of 39 full examples.
-Supports: phy_9, cs_9, and generic fallback.
+JSON schema at end for recency bias.
+Pattern summaries.
+Supports: phy_9, cs_9,maths_9 and generic fallback.
 """
 
 _PHY_9_PATTERNS = """[PATTERN: Definition trap]
@@ -38,6 +38,87 @@ A: Condensation — requires phase-change sequence understanding
 Q: "Coefficient of friction between tyre and road is ___"
 A: 0.2 — tests memorization of standard values"""
 
+_MATHS_9_PATTERNS = """
+[PATTERN: Inverse operation trap]
+Q: "If log_4(x) = 3/2 then x = ___"
+A: 8 — tests converting log→exponential form (x = 4^(3/2)), not calculator use; distractors are integers near the log value
+
+[PATTERN: Factor-before-HCF]
+Q: "H.C.F. of x² - y² and (x-y)² is ___"
+A: (x-y) — requires factoring first (difference of squares), then finding common factor; tests that HCF needs decomposition, not visual matching
+
+[PATTERN: Absolute value dual case]
+Q: "Solution set of |(5y)/3| = 5 is ___"
+A: {3, -3} — forces splitting into ±cases; single-value answers trap students who ignore the negative branch
+
+[PATTERN: Characteristic vs mantissa]
+Q: "Characteristic of log(0.01706) is ___"
+A: -2 — tests that characteristic is the exponent in scientific notation (1.706×10⁻²), not the leading digits; common confusion with -4 (digit count)
+
+[PATTERN: Minimal sufficient condition]
+Q: "Opposite angles equal, none is right angle → quadrilateral is ___"
+A: Parallelogram — rectangle/square are distractors requiring right angles; tests knowing the *minimal* defining property
+
+[PATTERN: Sign-to-quadrant mapping]
+Q: "Point (-2, -5) is in ___ quadrant"
+A: Third — tests (negative, negative) → Q3 rule; requires coordinate sign analysis, not memorization of random points
+
+[PATTERN: Conjugate sign flip]
+Q: "Conjugate of 2 - √3 is ___"
+A: 2 + √3 — tests flipping only the surd term's sign; 3-√2 and similar are distractors that rearrange numbers
+
+[PATTERN: Multivariate degree]
+Q: "Degree of 4a⁴b² + 6b⁴ - 12 is ___"
+A: 6 — requires adding exponents per term (4+2); tests that degree in multivariate polynomials is maximum *sum*, not single exponent
+
+[PATTERN: Perfect square completion]
+Q: "If x² - 4x + k is complete square, k = ___"
+A: 4 — requires pattern (half of -4, squared); tests structural recognition over formula plugging
+
+[PATTERN: Property naming vs using]
+Q: "6(7+8) = 6×7 + 6×8 is ___ property"
+A: Distributive — commutative/associative are distractors involving same operations but different structures; tests precise identification
+
+[PATTERN: Terminology absoluteness]
+Q: "In right triangle, side opposite right angle is ___"
+A: Hypotenuse — base/perpendicular change with reference angle; tests that hypotenuse is *absolute* while others are relative
+
+[PATTERN: Inequality decomposition]
+Q: "x ≤ 4 means ___"
+A: x < 4 or x = 4 — tests logical meaning of compound symbol; "x < 4" is incomplete, "x = 4" is too narrow
+
+[PATTERN: Expression inverse]
+Q: "Multiplicative inverse of x + y is ___"
+A: 1/(x+y) — tests inverse of *entire* expression; 1/(x-y) and -x-y are distractors for term-wise or additive confusion
+
+[PATTERN: Scientific notation standard form]
+Q: "Scientific notation of 0.0045467 is ___"
+A: 4.5467 × 10⁻³ — tests coefficient must be [1,10); 0.45467×10⁻³ violates standard form, 4.5467×10³ is wrong direction
+
+[PATTERN: Logarithm law discrimination]
+Q: "log_a(mn) = ___"
+A: log_a(m) + log_a(n) — product→sum; distractors are difference rule (quotient) and multiplication of logs (common error)
+
+[PATTERN: Quadratic factorization]
+Q: "Solution set of x² + 10x + 24 = 0 is ___"
+A: {-6, -4} — requires middle-term splitting; {-6, 4} and {6, -4} are sign-error distractors
+
+[PATTERN: Equation family by structure]
+Q: "3^x + 3^(2x) = 1 is ___ equation"
+A: Exponential (reducible to quadratic in 3^x) — tests classification by variable position, not polynomial degree
+
+[PATTERN: HCF via factor hierarchy]
+Q: "HCF of a³ - b³ and a⁶ - b⁶ is ___"
+A: a³ - b³ — requires recognizing a⁶-b⁶ = (a³)²-(b³)² = (a³+b³)(a³-b³); tests factorization depth
+
+[PATTERN: Parallelogram angle chain]
+Q: "If ∠A + ∠C = 130° in parallelogram ABCD, then m∠B = ___"
+A: 115° — requires 3-step chain: opposite angles equal → ∠A=65° → consecutive angles supplementary; tests property chaining
+
+[PATTERN: Polygon angle formula]
+Q: "Sum of angles in quadrilateral is ___"
+A: 360° — tests (n-2)×180°; 180° (triangle) is common distractor from overgeneralization
+"""
 
 # =============================================================================
 # COMPUTER SCIENCE 9 PATTERNS
@@ -92,6 +173,7 @@ STYLE PATTERNS (learn the style, never copy these exact questions):
 
 RULES:
 1. Every question must trace directly to the SOURCE CONTENT above. No external knowledge.
+2. Learn the style pattern of exam provided above never copy from it.
 2. Questions must be NEW — do not reuse the structure or wording of the style patterns.
 3. Distractors must be plausible (related concepts students confuse) but clearly wrong.
 4. Test understanding: apply concepts, compare terms, interpret definitions — not just recall names.
@@ -135,6 +217,7 @@ Answer:
 {('Book: ' + book_title) if book_title else ''}
 Instructions:
 - Answer ONLY from the provided content.
+- if query is for solving numericals, examples and content is not provided according to it then solve it provide step by step reasoning + used formula
 - Use simple and clear language suitable for Sindh Board students.
 - If formulas, tables, OCR text, or parsed content look incomplete or broken, intelligently reconstruct them from the surrounding provided content only.
 - Do NOT mention missing context, parsing issues, excerpts, or limitations unless absolutely necessary.
@@ -142,19 +225,21 @@ Instructions:
 - Include definitions, examples, formulas, or explanations if present in the content.
 - Mention page numbers if available in the content.
 - If the exact answer is not directly stated but can be reasonably inferred from the provided content, give the best educational answer based on it.
-- Avoid meta explanations like “the provided content does not mention”.
+- Avoid saying provided content doesnt mention instead say book doesnt have this concepts.
 - Never explain your reasoning process."""
 
     @staticmethod
     def quiz_batch(content_text: str, total_questions: int, book_id: str) -> str:
         """Optimized batch MCQ generation prompt.
         
-        Supports: phy_9, cs_9, and generic fallback.
+        Supports: phy_9, cs_9,maths_9 and generic fallback.
         """
         if "phy_9" in book_id:
             return _build_quiz_prompt(content_text, book_id, total_questions, _PHY_9_PATTERNS)
         elif "cs_9" in book_id:
             return _build_quiz_prompt(content_text, book_id, total_questions, _CS_9_PATTERNS)
+        elif "maths_9" in book_id:
+            return _build_quiz_prompt(content_text, book_id, total_questions, _MATHS_9_PATTERNS)
         else:
             # Generic fallback for any other book
             return _build_quiz_prompt(
