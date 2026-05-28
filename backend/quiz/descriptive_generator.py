@@ -205,37 +205,76 @@ Ex: Define Hypertext Markup Language (HTML). Explain its structure.
 """
 
 _MATHS_9_SHORT_PATTERNS = """
-[Solve] Solve/Evaluate: [PROBLEM]
-Ex: Solve: 2x + 5 = 15
+[ComplexVerify] Verify [PROPERTY] for z₁=[A+Bi] and z₂=[C+Di]
+Ex: Verify z₁/z₂ = z̄₁/z̄₂ for z₁=2+3i, z₂=4+2i
 
-[Def+Property] Define [CONCEPT]. Write [N] properties of [CONCEPT].
-Ex: Define rational numbers. Write two properties of rational numbers.
+[LogCompute] Find value of [EXPRESSION] using logarithm
+Ex: 99.87/(18.369×10.785)
 
-[Formula+Apply] Write the formula for [CONCEPT]. Apply it to find [RESULT].
-Ex: Write formula for area of triangle. Apply it to find area with base 10cm, height 5cm.
+[SurdEvaluate] If x=[A±B√C], find x² + 1/x²
+Ex: x=3-2√2, find x² + 1/x²
 
-[Simplify] Simplify: [EXPRESSION]
-Ex: Simplify: (3x² + 2x - 5) + (2x² - 3x + 7)
+[FactorTheorem] Find factors of [POLYNOMIAL] using factor theorem
+Ex: x³+5x²-4x-20
 
-[Factorize] Factorize: [EXPRESSION]
-Ex: Factorize: x² - 5x + 6
+[PerfectSquare] Find p,q for [QUARTIC] to be perfect square
+Ex: x⁴+8x³+30x²+px+q
+
+[AbsoluteSolve] Find solution set: |[LINEAR]/[CONST]| ± [N] = [M]
+Ex: |(2x+3)/4| + 2 = 7
+
+[QuadraticFormula] Solve by formula: [QUADRATIC] = 0
+Ex: 2x²-5x-3=0
+
+[RadicalSolve] Find solution set: √([LINEAR])/[N] = [M]
+Ex: √(3y+12)/7 = 3
+
+[ZeroFind] For what k, [N] is zero of P(x)=[CUBIC]
+Ex: -2 is zero of P(x)=x³+x²-14x-k
+
+[IdentityEvaluate] Find [EXPRESSION] when [CONDITIONS]
+Ex: 125x³+y³ when 5x+y=13, xy=10
+
+[TriangleInequality] Prove: Sum of any two sides > third side
+
+[Concurrency] Prove: [LINE_TYPE] of triangle sides are concurrent
+Ex: Right bisectors concurrent
+
+[EqualArea] Prove: Triangles on equal bases and equal altitudes are equal area
+
+[Construct] Construct Δ[ABC] with sides [A],[B],[C], draw [LINE_TYPE]
+Ex: ΔPQR: PQ=5.7cm, QR=6.4cm, PR=4cm, draw altitudes from Q,R
 """
 
 _MATHS_9_LONG_PATTERNS = """
-[Theorem+Proof] State and prove [THEOREM].
-Ex: State and prove Pythagoras theorem.
+[FactorizeSet] Factorize any [N] of: [6_POLYNOMIALS]
+Ex: (i) 169x⁴-(3t+4)² (ii) 7x+xz+7z+z² (iii) 8x³+12x²y+6xy²+y³
+    (iv) 4x⁴+1 (v) 42x²-8x-2 (vi) a⁶-b⁶
 
-[Method+Example] Explain [METHOD]. Solve using [METHOD]: [PROBLEM]
-Ex: Explain factorization method. Solve: x² - 5x + 6 = 0
+[GraphicalSolve] Solve simultaneous equations graphically (find [N] ordered pairs each)
+Ex: 2x=y+5; x=2y+1 (find 4 ordered pairs)
 
-[Concept+Derive] Define [CONCEPT]. Derive [FORMULA/EXPRESSION].
-Ex: Define midpoint. Derive midpoint formula.
+[ASA_Congruence] Prove: If one side and any two angles ≅ corresponding parts, triangles ≅
 
-[Graph+Plot] Plot [EQUATION] on graph paper. Find [PROPERTY].
-Ex: Plot y = 2x + 3. Find x-intercept and y-intercept.
+[Parallelogram_Props] Prove: In parallelogram, opposite sides ≅, opposite angles ≅, diagonals bisect
 
-[WordProblem] [SCENARIO]. Find [UNKNOWN].
-Ex: A train travels 300km in 4 hours. Find average speed.
+[Parallelogram_Test] Prove: If opposite sides of quadrilateral are ≅ and parallel, it's parallelogram
+
+[CircleCoords] Find center and radius given diameter endpoints A([x₁],[y₁]), B([x₂],[y₂])
+Ex: A(-3,4), B(11,6)
+
+[Collinear_Prove] Prove points P([x₁],[y₁]), Q([x₂],[y₂]), R([x₃],[y₃]) are collinear
+Ex: P(-3,-4), Q(2,6), R(0,2)
+
+[Apollonius] Prove: Sum of squares on two sides = 2×(half third side)² + 2×(median)²
+
+[AcuteAngle_Thm] Prove: Square on side opposite acute angle = sum of squares on containing sides minus 2×rectangle×projection
+
+[Isosceles_Thm] Prove: If two angles of triangle are ≅, opposite sides are ≅
+
+[UnequalAngles_Thm] Prove: If two angles unequal, side opposite greater angle is longer
+
+[AngleBisector_Thm] Prove: Any point on angle bisector is equidistant from its arms
 """
 
 _GENERIC_SHORT_PATTERNS = """
@@ -274,8 +313,9 @@ SINDH BOARD STYLE DNA:
 - Parenthetical: "(Only name)", "(decelerated a=6 m/s²)", "(G = 6.673 x 10⁻¹¹)"
 - Marking implicit: Every question naturally splits into mark-sized parts
 - CS specific: HTML tags in angle brackets, network acronyms (LAN/MAN/WAN), device names
+- Math specific: "Verify that", "Using logarithm", "By using factor theorem", "Find the solution set", "Prove it" — proofs end with "Prove it" not "Prove"; surds written as "sqrt(2)" or "2√3" in plaintext; complex numbers as "z₁ = a + bi"
+- Physics specific: "Derive", "State and prove", "Find the", "Calculate the"; formulas with units; standard values in parenthetical
 """
-
 
 PATTERN_REGISTRY: Dict[str, Dict[str, str]] = {
     "phy_9": {
@@ -290,7 +330,7 @@ PATTERN_REGISTRY: Dict[str, Dict[str, str]] = {
     },
     "maths_9": {
         "short": _MATHS_9_SHORT_PATTERNS,
-        "numerical": _MATHS_9_SHORT_PATTERNS,  # Maths "numericals" are problem-solving
+        "numerical": "",
         "long": _MATHS_9_LONG_PATTERNS,
     },
 }
@@ -385,7 +425,7 @@ class DescriptiveQuiz:
     title: str = ""
     section_b: List[DescriptiveQuestion] = field(default_factory=list)
     section_c: List[DescriptiveQuestion] = field(default_factory=list)
-    duration_minutes: int = 15
+    duration_minutes: int = 18
     total_marks: int = 18
     passing_percent: int = 40
     created_at: float = 0.0
@@ -399,9 +439,9 @@ class DescriptiveQuiz:
             self.created_at = time.time()
         if not self.instructions:
             self.instructions = {
-                "section_b": "Answer ALL FOUR (4) questions. Each carries 3 Marks.",
-                "section_c": "Answer ALL ONE (1) question. Each carries 6 Marks.",
-                "note": "Attempt ALL questions. No choice.",
+                "section_b": "SECTION 'B' (Short Answer Questions) Marks: 12\nAnswer ALL FOUR (4) questions. Each carries 3 Marks.",
+                "section_c": "SECTION 'C' (Detailed-Answer Question) Marks: 6\nAnswer ALL ONE (1) question. Each carries 6 Marks.",
+                "general": "Total Marks: 18. Passing: 40%. Time: 18 minutes. Attempt ALL questions. No choice.",
             }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -432,7 +472,7 @@ class DescriptiveQuiz:
             title=data.get("title", ""),
             section_b=section_b,
             section_c=section_c,
-            duration_minutes=data.get("duration_minutes", 15),
+            duration_minutes=data.get("duration_minutes", 18),
             total_marks=data.get("total_marks", 18),
             passing_percent=data.get("passing_percent", 40),
             created_at=data.get("created_at", 0.0),
@@ -524,7 +564,24 @@ NUMERICAL PATTERNS (3 Marks each):
 {numerical_patterns}
 """ if numerical_patterns else ""
 
-        return f"""You are a senior Sindh Board examiner creating ORIGINAL descriptive questions for Grade 9-10.
+        # Subject-specific generation rules
+        if book_id.startswith("maths"):
+            section_b_mix = "computation, proof, construction, verification"
+            section_c_mix = "factorize set, graphical solve, theorem proof, coordinate geometry"
+            type_instruction = "Every question requires working, derivation, or proof. NO theory-only."
+            eval_note = "For computation: Working (1) + Method (1) + Answer (1). For proofs: Statement (1) + Steps (2)."
+        elif book_id.startswith("phy"):
+            section_b_mix = "2 theory + 2 numerical"
+            section_c_mix = "derivation, law proof, process explanation"
+            type_instruction = "Mix theory definitions/factors/applications with numerical calculations."
+            eval_note = "For theory: Definition (1) + Explanation (1) + Example/Factor (1). For numericals: Formula (1) + Substitution (1) + Answer+Unit (1)."
+        else:  # cs
+            section_b_mix = "definition, classification, types, functions, differences, short notes"
+            section_c_mix = "detailed explanation with components, types, steps, or process"
+            type_instruction = "Theory-only. Definitions, classifications, differences, explanations."
+            eval_note = "For definitions: Precise definition (1) + Characteristics (1) + Example (1). For differences: Each valid point (1) × 3."
+
+        return f"""You are a senior Sindh Board examiner creating ORIGINAL descriptive questions for {book_id.upper()}.
 
 === LEARN THE PATTERN (Study structures, NEVER copy examples) ===
 
@@ -543,41 +600,51 @@ Chapter Topics: {', '.join(chapter_topics)}
 
 {content_text}
 
+=== QUIZ STRUCTURE ===
+- Section B: EXACTLY 4 short questions (3 marks each) = 12 marks
+- Section C: EXACTLY 1 long question (6 marks) = 6 marks
+- Total: 18 marks, 18 minutes
+- {type_instruction}
+
 === GENERATION RULES ===
 1. DO NOT copy example questions. Use their SENTENCE STRUCTURE only.
 2. Every question must trace to SOURCE CONTENT.
-3. Generate EXACTLY:
-   - Section B: 4 questions (mix: 2 theory + 2 numerical if numericals available, else 4 theory)
-   - Section C: 1 question (derivation, law, detailed explanation, or process)
-4. Numericals must have realistic values. Include correct_answer and formula_used.
-5. Each question needs: stem, marks, expected_points, rubric, correct_answer (numericals), formula_used (numericals)
-6. Use Sindh Board language: "What do you mean by", "Write down", "State and explain", "Also write"
-7. Use different patterns for each question
+3. Section B mix: {section_b_mix}
+4. Section C mix: {section_c_mix}
+5. Include correct_answer and formula_used for all computational/numerical questions.
+6. Each question needs: stem, marks, expected_points, rubric, correct_answer, formula_used, pattern_used
+7. Use Sindh Board language and tone from STYLE DNA.
+8. Use different patterns for each question.
+
+EVALUATION GUIDANCE:
+{eval_note}
 
 Return ONLY JSON:
 
 {{
   "section_b": [
     {{
-      "type": "short_answer|numerical",
+      "type": "short_answer",
       "stem": "question text",
       "marks": 3,
       "topic": "topic from content",
-      "expected_points": ["pattern for marks (defination + example + formula ...)"],
+      "expected_points": ["point 1", "point 2", "point 3"],
       "rubric": "mark distribution",
-      "correct_answer": "for numericals only",
-      "formula_used": "for numericals only",
+      "correct_answer": "answer or solution",
+      "formula_used": "formula name or expression",
       "pattern_used": "which pattern template"
     }}
   ],
   "section_c": [
     {{
-      "type": "long_answer|derivation|law_proof",
+      "type": "long_answer",
       "stem": "question text",
       "marks": 6,
       "topic": "topic from content",
-      "expected_points": ["pattern of answer (definiation + examples ...)"],
+      "expected_points": ["part 1", "part 2", "part 3", "part 4"],
       "rubric": "mark distribution",
+      "correct_answer": "full solution",
+      "formula_used": "key formulas",
       "pattern_used": "which pattern template"
     }}
   ]
@@ -592,7 +659,7 @@ Return ONLY JSON:
         qa_pairs = []
         for i, (q, a) in enumerate(zip(questions, answers), 1):
             numerical_extra = ""
-            if q.type == "numerical":
+            if q.type == "numerical" or (q.formula_used and q.correct_answer):
                 numerical_extra = f"""
     NUMERICAL CHECK for Q{i}:
     - Formula should be: {q.formula_used}
@@ -615,20 +682,36 @@ Return ONLY JSON:
 
         qa_block = "\n\n".join(qa_pairs)
 
-        return f"""You are a strict Sindh Board examiner marking a Grade 9-10 chapter test.
+        # Subject-specific evaluation rules
+        if book_id.startswith("maths"):
+            eval_rules = """1. For computation: Working shown (1) + Correct method (1) + Final answer (1). No working = 0 marks.
+2. For proofs: Statement (1) + Construction (1) + Proof steps (2).
+3. For factorization: Each correct factor (1.5) × 4 = 6 marks.
+4. For graphical: Table of values (2) + Plotting (2) + Solution point (2).
+5. If answer correct but no working: deduct 2 marks (award 1 only)."""
+        elif book_id.startswith("phy"):
+            eval_rules = """1. For theory: Definition (1) + Explanation/Example (1) + Application/Factor (1).
+2. For numericals: Formula (1) + Substitution (1) + Answer+Unit (1). No formula = 0 marks.
+3. For long: Law statement (2) + Derivation (2) + Application/Example (2).
+4. If answer correct but no working shown: deduct 2 marks (award 1 only)."""
+        else:
+            eval_rules = """1. For definitions: Precise definition (1) + Key characteristics (1) + Example (1).
+2. For differences: Each valid difference (1) × 3 = 3 marks.
+3. For long: Definition/Concept (2) + Components/Types/Steps (2) + Examples/Applications (2).
+4. HTML tags must be in angle brackets < >."""
+
+        return f"""You are a strict Sindh Board examiner marking a {book_id.upper()} chapter quiz.
 
 SUBJECT: {book_id}
 
 {qa_block}
 
 EVALUATION RULES:
-1. Evaluate ALL 5 answers together for consistency.
-2. Be STRICT — no sympathy marks for vague answers.
-3. For theory: Check expected points against student answer. 1 mark per valid point.
-4. For numericals: Formula (1) + Substitution (1) + Answer+Unit (1). No formula = 0 marks.
-5. If answer correct but no working shown: deduct 2 marks (award 1 only for answer).
-6. Give specific feedback per question: what was correct, what was missing, how to improve.
-7. Calculate total marks, percentage, and pass/fail (40% passing).
+{eval_rules}
+6. Evaluate ALL answers together for consistency.
+7. Be STRICT — no sympathy marks for vague answers.
+8. Give specific feedback per question: what was correct, what was missing, how to improve.
+9. Calculate total marks, percentage, and pass/fail (40% passing).
 
 Return ONLY JSON:
 {{
@@ -648,10 +731,11 @@ Return ONLY JSON:
       "confidence": 0.95,
       "formula_correct": true,
       "unit_correct": true,
-      "calculation_correct": true
+      "calculation_correct": true,
+      "weak_area": "concept area student struggles with"
     }}
   ],
-  "overall_feedback": "summary of performance across all 5 questions"
+  "overall_feedback": "summary of performance — focus on weak areas, never say memorize"
 }}"""
 
 
@@ -767,7 +851,7 @@ class DescriptiveQuizGenerator:
 
             for qa in data.get("section_b", []):
                 q = DescriptiveQuestion(
-                    section="A",
+                    section="B",
                     type=qa.get("type", "short_answer"),
                     stem=qa.get("stem", ""),
                     marks=qa.get("marks", 3),
@@ -789,20 +873,18 @@ class DescriptiveQuizGenerator:
                     topic=qc.get("topic", ""),
                     expected_points=qc.get("expected_points", []),
                     rubric=qc.get("rubric", ""),
+                    correct_answer=qc.get("correct_answer", ""),
+                    formula_used=qc.get("formula_used", ""),
                     pattern_used=qc.get("pattern_used", ""),
                 )
                 section_c.append(q)
 
-            total = sum(q.marks for q in section_b + section_c)
-
             return DescriptiveQuiz(
                 book_id=book_id,
                 chapter_id=chapter_id,
-                title=title or f"{chapter_id} - Chapter Test",
+                title=title or f"{chapter_id} - Chapter Quiz",
                 section_b=section_b,
                 section_c=section_c,
-                total_marks=total,
-                duration_minutes=max(15, total * 2),
             )
 
         except (json.JSONDecodeError, KeyError) as e:

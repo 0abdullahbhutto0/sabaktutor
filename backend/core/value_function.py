@@ -155,6 +155,7 @@ class ValueFunction:
 
         contents_to_encode = []
         node_ids_to_encode = []
+        long_nodes = []
 
         start_nodes = time.perf_counter()
 
@@ -168,6 +169,16 @@ class ValueFunction:
 
             timing.nodes_processed += 1
 
+            content_len = len(content)
+            if content_len > 12000:  # Roughly > ~4000 tokens
+                    long_nodes.append({
+                        'node_id': node.id,
+                        'chars': content_len,
+                        'estimated_tokens': content_len // 3,  # Rough estimate: ~3 chars per token
+                        'preview': content[:200].replace('\n', ' ')
+                    })
+
+
             # Check if already indexed
             if self.vector_store.exists(node.id):
                 timing.nodes_loaded_from_store += 1
@@ -179,6 +190,17 @@ class ValueFunction:
 
         timing.node_iteration_time_ms = (time.perf_counter() - start_nodes) * 1000
 
+        if long_nodes:
+            print(f"\n{'='*60}")
+            print(f"WARNING: Found {len(long_nodes)} nodes exceeding safe token limit!")
+            print(f"{'='*60}")
+            for node_info in sorted(long_nodes, key=lambda x: x['chars'], reverse=True)[:10]:
+                print(f"\n  Node ID: {node_info['node_id']}")
+                print(f"  Chars: {node_info['chars']:,} | Est. Tokens: {node_info['estimated_tokens']:,}")
+                print(f"  Preview: {node_info['preview']}...")
+            print(f"{'='*60}\n")
+        else:
+            print(f"\nAll {timing.nodes_processed} nodes within safe token limit.")
 
         if contents_to_encode:
             print(f"\nGENERATING {len(contents_to_encode)} NEW EMBEDDINGS...")
@@ -186,7 +208,7 @@ class ValueFunction:
             start_embed = time.perf_counter()
             embeddings = self.embedding_manager.encode(
                 contents_to_encode,
-                batch_size=32,
+                batch_size=16,
                 show_progress=show_progress
             )
             timing.embedding_generation_time_ms = (time.perf_counter() - start_embed) * 1000
