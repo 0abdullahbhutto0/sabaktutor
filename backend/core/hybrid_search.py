@@ -276,7 +276,8 @@ class HybridSearchEngine:
         # Add/merge MCTS results
         for r in mcts_results:
             nid = r.document_node_id
-            norm_score = getattr(r, '_norm_score', r.score)
+            mcts_learned_score = r.metadata.get("mean_value", r.score) if hasattr(r, 'metadata') else r.score
+            norm_score = getattr(r, '_norm_score', mcts_learned_score)
             if nid in merged:
                 merged[nid]["mcts_score"] = norm_score
                 merged[nid]["sources"].append("mcts")

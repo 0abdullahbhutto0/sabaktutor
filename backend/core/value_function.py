@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import threading
 import time
 from core.vector_store import FaissVectorStore
-
+import math
 
 @dataclass
 class ChunkScore:
@@ -40,29 +40,17 @@ class NodeScorer:
         self.use_sqrt_normalization = use_sqrt_normalization
 
     def compute_node_score(
-        self,
-        scores: List[ChunkScore],
-        node_id: str,
-        depth: int = 0,
-        query: Optional[str] = None,
-    ) -> NodeScore:
-        """Compute the score for a node."""
+    self,
+    scores: List[ChunkScore],
+    node_id: str,
+) -> NodeScore:
+        """Compute node score per formula: sum / sqrt(N + 1)"""
         if not scores:
             return NodeScore(node_id=node_id, raw_score=0.0)
 
-        max_score = max(s.score for s in scores)
-
-        keyword_boost = 0.0
-        if query:
-            query_words = set(query.lower().split())
-            for s in scores:
-                content_words = set(s.content.lower().split())
-                overlap = len(query_words & content_words)
-                if overlap >= 2:
-                    keyword_boost = max(keyword_boost, 0.15)
-
-        depth_boost = 0.2 if depth >= 2 else 0.0
-        raw_score = max_score + keyword_boost + depth_boost
+        n_chunks = len(scores)
+        sum_scores = sum(s.score for s in scores)
+        raw_score = sum_scores / math.sqrt(n_chunks + 1)     
 
         return NodeScore(node_id=node_id, raw_score=raw_score)
 
