@@ -8,7 +8,6 @@ node_modules/
 /backend/.env
 /.env
 /backend/__pycache__/
-/backend/vector_index/
 # Expo
 .expo/
 dist/
