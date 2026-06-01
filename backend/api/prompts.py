@@ -3,7 +3,7 @@ Custom Prompts for LLM Interactions
 ================================================
 JSON schema at end for recency bias.
 Pattern summaries.
-Supports: phy_9, cs_9,maths_9 and generic fallback.
+Supports: phy_9, cs_9, maths_9, cs_10 and generic fallback.
 """
 
 _PHY_9_PATTERNS = """[PATTERN: Definition trap]
@@ -120,9 +120,6 @@ Q: "Sum of angles in quadrilateral is ___"
 A: 360° — tests (n-2)×180°; 180° (triangle) is common distractor from overgeneralization
 """
 
-# =============================================================================
-# COMPUTER SCIENCE 9 PATTERNS
-# =============================================================================
 _CS_9_PATTERNS = """[PATTERN: Definition/Concept identification]
 Q: "Physical and logical address both are: ___"
 A: Permanent — tests precise terminology (distractors: Different, Unique, Temporary are all partially true, making it tricky)
@@ -155,42 +152,102 @@ A: Web Hosting — tests internet infrastructure understanding
 Q: "Ethical Hacker is also known as: ___"
 A: White hat Hacker — tests cybersecurity terminology (distractors: Black Hat, Red Hat are real hacker types)"""
 
+_CS_10_PATTERNS = """[PATTERN: Continue vs Break target]
+Q: "Continue statement controls to: ___"
+A: The top of loop — continue restarts iteration; break exits. Distractors swap targets or add function scope.
+
+[PATTERN: Universal gate = NOR/NAND]
+Q: "The universal gate is: ___"
+A: NOR — any logic implementable. NOT/OR incomplete; "None" overthink trap.
+
+[PATTERN: Truth table row count = 2^n]
+Q: "With combination of three variables, outputs expected: ___"
+A: Eight — 2^n rule. Distractors: nearby evens (4,6,10) for pattern-guessers.
+
+[PATTERN: Stack push = insert, pop = delete]
+Q: "When data is pushed in stack, data is: ___"
+A: inserted — LIFO vocab. deleted/pop = opposite; sorted/edited = unrelated traps.
+
+[PATTERN: Operator family classification]
+Q: "!= belongs to: ___" / "&& is: ___" / ">> is: ___"
+A: Relational / Logical / Input stream — test symbol→family mapping. Distractors swap families (arithmetic, bitwise & vs &&).
+
+[PATTERN: Assignment (=) vs Equality (==)]
+Q: "To compare two values, correct operator is: ___"
+A: == — = assigns; <= is relational but not equality; * is arithmetic trap.
+
+[PATTERN: Nested loop = loop-in-loop]
+Q: "Loop within loop is called: ___"
+A: Nested loop — inner/outer describe position, not the structure name.
+
+[PATTERN: Break canonical use = switch]
+Q: "break statement is used with: ___"
+A: switch — canonical case-termination. if/for/while can use it but switch is primary.
+
+[PATTERN: Binary = max 2 children]
+Q: "In binary tree, each child can have maximum: ___"
+A: two nodes — "bi" = two. One/three/four = number-pattern guessing.
+
+[PATTERN: HLL readable by humans, LLL by machines]
+Q: "Syntax of High Level Language is easily readable for: ___"
+A: humans — "both" ignores compilation; machines read bytecode/binary.
+
+[PATTERN: Algorithm = textual, Flowchart = graphical]
+Q: "Logic of program is graphically called: ___" / "Step by step solution in simple language is: ___"
+A: Flowchart / Algorithm — test medium→representation mapping. Swapping = common error.
+
+[PATTERN: Error taxonomy by detector]
+Q: "All errors detected by user are called: ___"
+A: Logical error — syntax/runtime/semantic = compiler/interpreter detected.
+
+[PATTERN: Bool domain = {True, False} only]
+Q: "A Bool data can store: ___"
+A: True or False — number/string/fractional = type-confusion distractors.
+
+[PATTERN: Flowchart symbol shapes]
+Q: "Symbol for input/output in flowchart: ___"
+A: Parallelogram — triangle/square/rectangle = other symbol purposes.
+
+[PATTERN: Variable scope by declaration location]
+Q: "Variables declared in function definition are: ___"
+A: Local variables — instance (OOP), global (file), static (storage class) = scope-family distractors."""
+
 
 # =============================================================================
 # PROMPT BUILDER
 # =============================================================================
-def _build_quiz_prompt(content_text: str, book_id: str, total_questions: int, patterns: str) -> str:
-    """Build optimized quiz generation prompt."""
-    return f"""You are a Sindh Board examiner creating MCQs for Grade 9.
 
-SOURCE CONTENT (derive all questions strictly from this):
-Book: {book_id}
+# Dynamic ratio configuration per subject
+# Format: (mcq_pct, true_false_pct, fill_in_blank_pct, mcq_calculation_pct)
+_QUIZ_RATIOS = {
+    "cs_9":    (60, 15, 20, 5),    
+    "cs_10":   (60, 15, 20, 5),   
+    "maths_9": (30, 10, 10, 50),  
+    "maths_10":(30, 10, 10, 50),   
+    "phy_9":   (40, 15, 15, 30),   
+    "phy_10":  (40, 15, 15, 30),   
+}
 
-{content_text}
+def _get_quiz_ratio(book_id: str) -> tuple:
+    """Return (mcq%, true_false%, fill_blank%, calc%) for a given book_id."""
+    for key in _QUIZ_RATIOS:
+        if key in book_id:
+            return _QUIZ_RATIOS[key]
+    return (50, 20, 15, 15)
 
-STYLE PATTERNS (learn the style, never copy these exact questions):
-{patterns}
 
-RULES:
-1. Every question must trace directly to the SOURCE CONTENT above. No external knowledge.
-2. Learn the style pattern of exam provided above never copy from it.
-2. Questions must be NEW — do not reuse the structure or wording of the style patterns.
-3. Distractors must be plausible (related concepts students confuse) but clearly wrong.
-4. Test understanding: apply concepts, compare terms, interpret definitions — not just recall names.
-5. Vary question types across the {total_questions}: mix definition, application, comparison, and real-life mapping.
-
-Generate exactly {total_questions} MCQs. Return ONLY a JSON array:
-
-[
-  {{
-    "stem": "question text",
-    "options": ["A", "B", "C", "D"],
-    "correct_index": 0,
-    "topic": "topic from content",
-    "difficulty": "easy|medium|hard"
-  }}
-]"""
-
+def _get_patterns_for_book(book_id: str) -> str:
+    """Return the appropriate pattern set for a book_id."""
+    if "phy_9" in book_id:
+        return _PHY_9_PATTERNS
+    elif "cs_9" in book_id:
+        return _CS_9_PATTERNS
+    elif "maths_9" in book_id:
+        return _MATHS_9_PATTERNS
+    elif "cs_10" in book_id:
+        return _CS_10_PATTERNS
+    else:
+        return "Generate questions that test understanding, not memorization. Use plausible distractors."
 
 # =============================================================================
 # PROMPTS CLASS
@@ -216,48 +273,98 @@ Answer:
       return f"""You are an expert educational tutor for the Sindh Board curriculum.
 {('Book: ' + book_title) if book_title else ''}
 Instructions:
-- Answer ONLY from the provided content.
+- You are sabakTutor chat buddy trained for helping students of Sindh board 9/10th in studies
+- Answer ONLY from the provided content if cant do from provided content state this topic is not in book and tell what user should ask according to provided book but never mention what content provided say for exam lets learn about this instead.
 - if query is for solving numericals, examples and content is not provided according to it then solve it provide step by step reasoning + used formula
 - Use simple and clear language suitable for Sindh Board students.
 - If formulas, tables, OCR text, or parsed content look incomplete or broken, intelligently reconstruct them from the surrounding provided content only.
 - Do NOT mention missing context, parsing issues, excerpts, or limitations unless absolutely necessary.
-- Keep the answer concise and direct.
 - Include definitions, examples, formulas, or explanations if present in the content.
 - Mention page numbers if available in the content.
-- If the exact answer is not directly stated but can be reasonably inferred from the provided content, give the best educational answer based on it.
-- Avoid saying provided content doesnt mention instead say book doesnt have this concepts.
-- Never explain your reasoning process."""
+- Never explain your reasoning process.
+- if content is from physics provide formula or definition if required if its maths provide formulas and if its of computer science provide code blocks if necessary
+"""
 
     @staticmethod
-    def quiz_batch(content_text: str, total_questions: int, book_id: str) -> str:
-        """Optimized batch MCQ generation prompt.
-        
-        Supports: phy_9, cs_9,maths_9 and generic fallback.
+    def generate_mixed_quiz(content_text: str, total_items: int, book_id: str) -> str:
         """
-        if "phy_9" in book_id:
-            return _build_quiz_prompt(content_text, book_id, total_questions, _PHY_9_PATTERNS)
-        elif "cs_9" in book_id:
-            return _build_quiz_prompt(content_text, book_id, total_questions, _CS_9_PATTERNS)
-        elif "maths_9" in book_id:
-            return _build_quiz_prompt(content_text, book_id, total_questions, _MATHS_9_PATTERNS)
-        else:
-            # Generic fallback for any other book
-            return _build_quiz_prompt(
-                content_text, book_id, total_questions,
-                "Generate questions that test understanding, not memorization. Use plausible distractors."
-            )
+        Generate a mixed interactive quiz with subject-specific ratios.
+        Ratios adapt per book: CS=theory-heavy, Maths=calc-heavy, Physics=balanced.
+        """
+        patterns = _get_patterns_for_book(book_id)
+        mcq_pct, tf_pct, fb_pct, calc_pct = _get_quiz_ratio(book_id)
 
-    @staticmethod
-    def explain_answer(question: str, correct_answer: str, options: list, book_title: str = "") -> str:
-        """Explain why an answer is correct."""
-        return f"""Explain why the correct answer is right for this question:
+        return f"""You are a Sindh Board examiner creating a mixed-format quiz for Grade 9/10.
 
-Book: {book_title}
-Question: {question}
-Correct Answer: {correct_answer}
-All Options: {options}
+SOURCE CONTENT (derive ALL questions strictly from this):
+Book: {book_id}
 
-Provide a brief educational explanation (2-3 sentences) focusing on the key concept."""
+{content_text}
+
+BOARD EXAM PATTERNS (learn the style, never copy these exact questions):
+{patterns}
+
+RULES:
+1. Generate exactly {total_items} items total.
+2. Mix these types in this ratio (STRICT — follow percentages):
+   - {mcq_pct}% Standard MCQ (board pattern): definition traps, formula application, concept comparison, real-life mapping
+   - {tf_pct}% True/False: test common misconceptions
+   - {fb_pct}% Fill-in-Blank: key terms, formulas, definitions
+   - {calc_pct}% MCQ Calculation: step-by-step numerical problems
+3. Every question must trace directly to SOURCE CONTENT. No external knowledge.
+4. For MCQs: use plausible distractors from the same concept family. Test understanding, not memorization.
+5. For True/False: statements should be tricky — common student misconceptions.
+6. For Fill-in-Blank: one precise answer. No ambiguity.
+7. For MCQ Calculation: show step-by-step solution in explanation.
+8. Vary difficulty: 40% easy, 40% medium, 20% hard.
+9. Board pattern MCQs must follow the cognitive traps shown in patterns above.
+
+Return ONLY a JSON array with polymorphic objects:
+
+For Standard MCQ (board pattern):
+{{
+  "type": "mcq",
+  "stem": "question text",
+  "options": ["A", "B", "C", "D"],
+  "correct_index": 0,
+  "topic": "topic from content",
+  "difficulty": "easy|medium|hard",
+  "marks": 1,
+  "pattern_used": "name of pattern from patterns above"
+}}
+
+For True/False:
+{{
+  "type": "true_false",
+  "statement": "The statement to evaluate",
+  "is_true": true,
+  "explanation": "Why it is true or false",
+  "difficulty": "easy|medium|hard",
+  "marks": 1
+}}
+
+For Fill in the Blank:
+{{
+  "type": "fill_in_blank",
+  "sentence_before": "The beginning of the sentence ",
+  "blank_answer": "the missing word",
+  "sentence_after": " the rest of the sentence.",
+  "difficulty": "easy|medium|hard",
+  "marks": 1
+}}
+
+For MCQ Calculation:
+{{
+  "type": "mcq_calculation",
+  "problem": "The calculation question",
+  "options": ["A", "B", "C", "D"],
+  "correct_index": 0,
+  "explanation": "Step by step solution",
+  "difficulty": "easy|medium|hard",
+  "marks": 2
+}}
+
+Generate the JSON array now."""
 
     @staticmethod
     def generate_summary(content: str, max_sentences: int = 5) -> str:
@@ -292,55 +399,3 @@ Return ONLY a JSON array:
     "content": "Definition, formula, or explanation"
   }}
 ]"""
-
-    @staticmethod
-    def generate_interactive_quiz(content_text: str, total_items: int, book_id: str) -> str:
-        """Generate an interactive quiz with a mix of true_false, fill_in_blank, and mcq_calculation items."""
-        return f"""You are a Sindh Board examiner creating an interactive quiz from the textbook.
-
-SOURCE CONTENT:
-Book: {book_id}
-
-{content_text}
-
-RULES:
-1. Generate exactly {total_items} interactive quiz items.
-2. Mix the following types: true_false, fill_in_blank, mcq, and (if applicable) mcq_calculation.
-3. Every item must trace directly to the SOURCE CONTENT.
-
-Return ONLY a JSON array containing polymorphic objects based on their type:
-
-For True/False:
-{{
-  "type": "true_false",
-  "statement": "The statement to evaluate",
-  "is_true": true,
-  "explanation": "Why it is true or false"
-}}
-
-For Fill in the Blank:
-{{
-  "type": "fill_in_blank",
-  "sentence_before": "The beginning of the sentence ",
-  "blank_answer": "the missing word",
-  "sentence_after": " the rest of the sentence."
-}}
-
-For MCQ Calculation:
-{{
-  "type": "mcq_calculation",
-  "problem": "The calculation question",
-  "options": ["A", "B", "C", "D"],
-  "correct_index": 0,
-  "explanation": "Step by step solution"
-}}
-
-For Standard MCQ:
-{{
-  "type": "mcq",
-  "stem": "The question text",
-  "options": ["A", "B", "C", "D"],
-  "correct_index": 0
-}}
-
-Generate the JSON array now."""

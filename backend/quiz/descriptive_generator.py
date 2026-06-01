@@ -1,17 +1,17 @@
 """Descriptive Quiz Generator - Adaptive Pattern-Based
-Supports: phy_9, cs_9, maths_9, phy_10, cs_10, maths_10, ... 11, 12
+Supports: phy_9, cs_9, maths_9, phy_10, cs_10, maths_10
 Easy to add new subjects/grades by adding pattern modules.
 Quiz NOT stored. Client passes quiz back for evaluation.
-Only evaluation results stored in Firestore."""
-
+Only evaluation results stored in Firestore.
+"""
 
 import json
 import uuid
+import random
 from typing import List, Dict, Optional, Any, AsyncGenerator
 from dataclasses import dataclass, field
 
 from core.streaming_client import StreamingLLMClient
-
 
 
 _PHY_9_SHORT_PATTERNS = """
@@ -277,6 +277,130 @@ Ex: P(-3,-4), Q(2,6), R(0,2)
 [AngleBisector_Thm] Prove: Any point on angle bisector is equidistant from its arms
 """
 
+_CS_10_SHORT_PATTERNS = """
+[WhatIs] What is [CONCEPT]?
+Ex: What is an algorithm? / What is a computer program? / What is ITERATION/LOOP?
+
+[DefOnly] Define [CONCEPT].
+Ex: Define Reserved words. / Define comment statement. / Define Queue and Stack.
+
+[WhatIs+Importance] What is the importance of [CONCEPT] for [PURPOSE]?
+Ex: What is the importance of Flowchart for solving a problem?
+
+[WhatAre] What are [CONCEPT] in [LANGUAGE/CONTEXT]?
+Ex: What are Strings in C++?
+
+[WhatIs+WhyUse] What is [CONCEPT]? Why do we use it in our program?
+Ex: What is Statement Terminator? Why do we use it in our program?
+
+[Def+Types] Define [CONCEPT] and its types.
+Ex: Define comment statement and its types.
+
+[Why] Why do we [ACTION]?
+Ex: Why do we make block of statements using braces?
+
+[PurposeOf] What is the purpose of "[KEYWORD]" statement in [LANGUAGE]?
+Ex: What is the purpose of "default" statement in C++?
+
+[Diff] Differentiate between [A] and [B].
+Ex: Differentiate between Constant and Variable. / Differentiate between constant and variables.
+
+[Diff] What is the difference between [A] and [B]?
+Ex: What is the difference between using scratch online and offline?
+Ex: What is the difference between Source code and Object code?
+Ex: What is the difference between Low-Level language and High-Level language?
+
+[WhatKnow] What do you know about [CONCEPT]?
+Ex: What do you know about Script area in a Scratch Editor?
+
+[ListAdvantages] List any [N] advantages of [CONCEPT].
+Ex: List of any three advantages of designing flowchart.
+
+[DefRules] Define the rules for [CONCEPT].
+Ex: Define the rules for naming variable.
+
+[WritePurpose] Write the purpose of following [CONCEPT_LIST].
+Ex: Write the purpose of following escape sequence: (i) \\n (ii) \\t (iii) \\b
+
+[DefFollowing] Define the following: (i) [A] (ii) [B] [OR] (i) [C] (ii) [D]
+Ex: Define the following: (i) Syntax error (ii) Logical error OR (i) Compiler (ii) Interpreter
+
+[DefWithExamples] Define [CONCEPT] with examples.
+Ex: Define Arithmetic assignment operators with examples.
+
+[DrawFlowchart] Draw a flow chart of [PROCESS].
+Ex: Draw a flow chart of finding average of three numbers.
+
+[ExplainType] Explain the following [N] types of [CONCEPT].
+Ex: Explain the following two types of low-level language. a) Machine language b) Assembly language.
+
+[DescribeWithExamples] Describe [CONCEPT] with examples.
+Ex: Describe OOP language with examples.
+
+[WriteProgramSimple] Write a program to [TASK].
+Ex: Write a program to calculate sum and product of 10 and 20.
+
+[SolveOperator] Solving [OPERATOR_TYPE] operator when [VARIABLES], Find value of [EXPRESSION].
+Ex: Solving Arithmetic operator when A=24 and B=5, Find value of A%B.
+
+[ExplainStatement] Explain [STATEMENT_TYPE] statement.
+Ex: Explain Switch statement.
+
+[WhatIs+HowWorks] What is [CONCEPT]? How it works?
+Ex: What is for Loop? How it works?
+
+[WriteNProperties] Write [N] properties of [CONCEPT].
+Ex: Write four properties of truth table.
+
+[WhatIs+DiffN] What is [CONCEPT], write [N] difference between [A], [B] and [C].
+Ex: What is internet, write one difference between webpage, web browser and web server.
+"""
+
+_CS_10_LONG_PATTERNS = """
+[ExplainStructure] Explain basic structure of [LANGUAGE].
+Ex: Explain basic structure of C++?
+
+[Def+Types+Detail] Define types of [CONCEPT] with its [PROPERTIES] and [DETAIL].
+Ex: Define types of Basic Logic Gate with its symbol and Truth Table.
+
+[WhyNeed+DescribeTypes] Why do we need [CONCEPT]? Describe its types.
+Ex: Why do we need a language translator? Describe its types.
+
+[Def+Examples] Define [CONCEPT] with examples.
+Ex: Define increment and decrement operators with examples.
+
+[DescribeTypes] Describe the types of [CONCEPT].
+Ex: Describe the types of Linear Data Structure.
+
+[WritePurposeSyntax] Write down the purpose and syntax of the following:
+Ex: Write down the purpose and syntax of the following: (i) FOR (ii) WHILE (iii) DO-WHILE
+
+[ExplainSteps] Explain the steps involved in [PROCESS].
+Ex: Explain the steps involved in problem solving.
+
+[DescribeCodes] Give description of the following codes and symbols:
+Ex: Give description of the following codes and symbols: i) #include<iostream> ii) using namespace std; iii) Int main()
+
+[DefFollowingDetail] Define the following [CONCEPT_LIST]:
+Ex: Define the following logic gates: (i) AND gate (ii) OR gate (iii) NOT gate
+
+[DiffDetail] Differentiate between [A] and [B].
+Ex: Differentiate between Algorithm and Flowchart.
+
+[DescribeConcepts] Describe [CONCEPT_A] and [CONCEPT_B].
+Ex: Describe Tree and Graph.
+
+[DrawTruthTable] Draw truth table of the following:
+Ex: Draw truth table of the following: (i) Y = A. B (ii) Y = A. B. C (iii) Y = AB
+
+[WhatIs+ModulesDetail] What is [CONCEPT]? Write detail of [N] modules of [SYSTEM].
+Ex: What is integrated development Environment(IDE) in programming? Write detail of five modules of C programming Environment.
+
+[WriteProgram] Write a Program in [LANGUAGE] to [TASK].
+Ex: Write a Program in C to convert Fahrenheit to centigrade temperature.
+Ex: Write a program in C to find the factorial of a number."""
+
+
 _GENERIC_SHORT_PATTERNS = """
 [Def+Ext] Define [CONCEPT]. Also explain [PROPERTY/ASPECT] of [CONCEPT].
 Marks: 1 + 2
@@ -328,6 +452,11 @@ PATTERN_REGISTRY: Dict[str, Dict[str, str]] = {
         "numerical": "", 
         "long": _CS_9_LONG_PATTERNS,
     },
+    "cs_10": {
+        "short": _CS_10_SHORT_PATTERNS,
+        "numerical": "", 
+        "long": _CS_10_LONG_PATTERNS,
+    },
     "maths_9": {
         "short": _MATHS_9_SHORT_PATTERNS,
         "numerical": "",
@@ -338,16 +467,13 @@ PATTERN_REGISTRY: Dict[str, Dict[str, str]] = {
 
 def get_patterns(book_id: str) -> Dict[str, str]:
     """Get patterns for a book_id. Falls back to generic if not found."""
-    # Try exact match first
     if book_id in PATTERN_REGISTRY:
         return PATTERN_REGISTRY[book_id]
-    
-    # Try prefix match (e.g., "phy_10" not in registry, but "phy" patterns work)
+
     for key in PATTERN_REGISTRY:
         if book_id.startswith(key.split("_")[0] + "_"):
             return PATTERN_REGISTRY[key]
-    
-    # Fallback to generic
+
     return {
         "short": _GENERIC_SHORT_PATTERNS,
         "numerical": "",
@@ -554,17 +680,16 @@ class DescriptivePrompts:
         chapter_topics: List[str],
     ) -> str:
         patterns = get_patterns(book_id)
-        
+
         short_patterns = patterns.get("short", _GENERIC_SHORT_PATTERNS)
         numerical_patterns = patterns.get("numerical", "")
         long_patterns = patterns.get("long", _GENERIC_LONG_PATTERNS)
-        
+
         numerical_block = f"""
 NUMERICAL PATTERNS (3 Marks each):
 {numerical_patterns}
 """ if numerical_patterns else ""
 
-        # Subject-specific generation rules
         if book_id.startswith("maths"):
             section_b_mix = "computation, proof, construction, verification"
             section_c_mix = "factorize set, graphical solve, theorem proof, coordinate geometry"
@@ -574,8 +699,8 @@ NUMERICAL PATTERNS (3 Marks each):
             section_b_mix = "2 theory + 2 numerical"
             section_c_mix = "derivation, law proof, process explanation"
             type_instruction = "Mix theory definitions/factors/applications with numerical calculations."
-            eval_note = "For theory: Definition (1) + Explanation (1) + Example/Factor (1). For numericals: Formula (1) + Substitution (1) + Answer+Unit (1)."
-        else:  # cs
+            eval_note = "For theory: Definition (1) + Explanation/Example (1) + Application/Factor (1). For numericals: Formula (1) + Substitution (1) + Answer+Unit (1)."
+        else:
             section_b_mix = "definition, classification, types, functions, differences, short notes"
             section_c_mix = "detailed explanation with components, types, steps, or process"
             type_instruction = "Theory-only. Definitions, classifications, differences, explanations."
@@ -668,21 +793,20 @@ Return ONLY JSON:
 
             qa_pairs.append(f"""QUESTION {i} (Marks: {q.marks}):
     {q.stem}
-    
+
     MARKING RUBRIC:
     {q.rubric}
-    
+
     EXPECTED POINTS:
     {chr(10).join(f"    - {p}" for p in q.expected_points)}
     {numerical_extra}
-    
+
     STUDENT ANSWER {i}:
     {a}
     """)
 
-        qa_block = "\n\n".join(qa_pairs)
+        qa_block = "".join(qa_pairs)
 
-        # Subject-specific evaluation rules
         if book_id.startswith("maths"):
             eval_rules = """1. For computation: Working shown (1) + Correct method (1) + Final answer (1). No working = 0 marks.
 2. For proofs: Statement (1) + Construction (1) + Proof steps (2).
@@ -711,7 +835,7 @@ EVALUATION RULES:
 6. Evaluate ALL answers together for consistency.
 7. Be STRICT — no sympathy marks for vague answers.
 8. Give specific feedback per question: what was correct, what was missing, how to improve.
-9. Calculate total marks, percentage, and pass/fail (40% passing).
+9. Calculate total marks, percentage, and pass/fail (40% passing) and return question wise obtain marking.
 
 Return ONLY JSON:
 {{
@@ -764,23 +888,23 @@ class DescriptiveQuizGenerator:
     ) -> AsyncGenerator[Dict[str, Any], None]:
 
         nodes = self._get_chapter_nodes(document_tree, chapter_id)
-        selected_nodes = self._select_nodes(nodes, 8)
+        content_nodes = [n for n in nodes if n.content.strip()]
 
-        if not selected_nodes:
+        if not content_nodes:
             yield {"type": "error", "message": "No content available for this chapter"}
             return
 
+        # Extract chapter topics from ALL nodes
         chapter_topics = list(set(
-            n.get("node_title", "").split(".")[0].strip()
-            for n in selected_nodes
-            if n.get("node_title")
+            n.title.split(".")[0].strip()
+            for n in content_nodes
+            if n.title
         ))[:5]
 
         content_text = ""
-        for i, node in enumerate(selected_nodes, 1):
-            content_text += f"\n--- PASSAGE {i} ---\n"
-            content_text += f"Title: {node['node_title']}\n"
-            content_text += f"Content: {node['content']}\n"
+        for i, node in enumerate(content_nodes, 1):
+            content_text += f"--- PASSAGE {i}: {node.title or 'Untitled'} ---"
+            content_text += f"{node.content}"
 
         prompt = self.prompts.generate_quiz(
             content_text=content_text,
@@ -953,26 +1077,3 @@ class DescriptiveQuizGenerator:
     def _get_chapter_nodes(self, document_tree, chapter_id: str) -> List[Any]:
         nodes = document_tree.get_chapter_nodes(chapter_id)
         return [n for n in nodes if n.content.strip()]
-
-    def _select_nodes(self, nodes: List[Any], max_nodes: int) -> List[Dict]:
-        if not nodes:
-            return []
-
-        content_nodes = [n for n in nodes if n.content.strip()]
-        if not content_nodes:
-            return []
-
-        step = max(1, len(content_nodes) // max_nodes) if len(content_nodes) > max_nodes else 1
-
-        selected = []
-        for i in range(0, len(content_nodes), step):
-            node = content_nodes[i]
-            selected.append({
-                "node_id": node.id,
-                "content": node.content,
-                "node_title": node.title or "",
-            })
-            if len(selected) >= max_nodes:
-                break
-
-        return selected
