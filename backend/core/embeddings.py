@@ -75,11 +75,7 @@ class EmbeddingManager:
         logger.info(f"[DEBUG_EMBED] === _make_embedding_request called ===")
         logger.info(f"[DEBUG_EMBED] is_query: {is_query}")
         logger.info(f"[DEBUG_EMBED] texts count: {len(texts) if texts else 0}")
-        if texts:
-            for i, t in enumerate(texts[:5]):  # Log first 5 texts
-                text_preview = t[:100] + "..." if len(t) > 100 else t
-                logger.info(f"[DEBUG_EMBED] text[{i}]: {repr(text_preview)}")
-
+     
         prefix = "query: " if is_query else "passage: "
         prefixed_texts = [prefix + t for t in texts]
 

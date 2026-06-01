@@ -4,86 +4,67 @@ Pydantic Schemas for API Request/Response Models
 Streaming-only API. All responses use SSE.
 """
 
-from typing import List, Optional,Dict,Any
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
 
 class AskRequest(BaseModel):
     book_id: str
     query: str
-    history: Optional[List[Dict[str, str]]] = None
+    history: List[ChatMessage] = Field(default_factory=list)
     previous_summary: Optional[str] = None
 
 class SummarizeRequest(BaseModel):
-    history: List[Dict[str, str]]
+    history: List[ChatMessage]
 
 
-class UnitChapter(BaseModel):
-    id: str
-    name: str
+# =============================================================================
+# QUIZ GENERATION SCHEMAS (MERGED - single background endpoint)
+# =============================================================================
 
+class QuizBackgroundGenerateRequest(BaseModel):
+    """Request for mixed quiz generation (background task).
 
-class QuizGenerateRequest(BaseModel):
-    book_id: str
-    book_title: str = ""
-    quiz_type: str = Field(..., pattern="^(chapter|unit|full)$")
-    chapter_id: Optional[str] = None
-    unit_chapters: Optional[List[UnitChapter]] = None
-    title: Optional[str] = None
-    target_count: int = 10
-    duration_minutes: int = 20
-    passing_percent: int = 60
-
-
-class StreamEvent(BaseModel):
-    event: str
-    data: dict
-
-
-class QuizBackgroundGenerateRequest(QuizGenerateRequest):
+    Generates: 60% board-pattern MCQ + 20% true_false + 10% fill_in_blank + 10% mcq_calculation
+    """
     user_id: str
+    book_id: str
     level_id: str
+    quiz_type: str = "chapter"  # "chapter" | "unit" | "full_book"
+    chapter_id: Optional[str] = None
+    unit_chapters: Optional[List[str]] = None
+    target_count: int = 20
+    title: Optional[str] = None
 
-class DescriptiveQuestionData(BaseModel):
-    """Single question structure — what generator returns."""
-    id: str 
-    type: str = "short_answer"  # short_answer | numerical | long_answer | derivation | law_proof
-    stem: str
-    marks: int
-    topic: str = ""
-    expected_points: List[str] = Field(default_factory=list)
-    rubric: str = ""
-    correct_answer: str = ""       # For numericals only
-    formula_used: str = ""           # For numericals only
-    source_node_id: str = ""
-    pattern_used: str = ""
 
+# =============================================================================
+# DESCRIPTIVE QUIZ SCHEMAS
+# =============================================================================
 
 class DescriptiveGenerateRequest(BaseModel):
-    """Generate chapter-wise descriptive quiz."""
     book_id: str
     chapter_id: str
-    title: Optional[str] = None
 
 
-class DescriptiveAnswerItem(BaseModel):
-    """Single answer from student."""
+class StudentAnswer(BaseModel):
     question_id: str
     answer_text: str
 
 
-class DescriptiveQuizData(BaseModel):
-    """Quiz data passed back from client for evaluation."""
-    quiz_id: str
-    book_id: str
-    chapter_id: str
-    title: str = ""
-    section_b: List[DescriptiveQuestionData] = Field(default_factory=list) 
-    section_c: List[DescriptiveQuestionData] = Field(default_factory=list)  
-    total_marks: int = 15
-
-
 class DescriptiveEvaluateRequest(BaseModel):
-    quiz: DescriptiveQuizData
-    answers: List[DescriptiveAnswerItem]
-    time_taken_minutes: Optional[int] = None
+    quiz: Dict[str, Any]  # Full quiz object from generate response
+    answers: List[StudentAnswer]
+    time_taken_minutes: int
+
+
+# =============================================================================
+# RESPONSE SCHEMAS
+# =============================================================================
+
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+    streaming: bool

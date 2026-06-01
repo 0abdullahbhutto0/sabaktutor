@@ -20,7 +20,6 @@ from quiz.descriptive_generator import DescriptiveQuiz
 from api.schemas import (
     AskRequest,
     SummarizeRequest,
-    QuizGenerateRequest,
     QuizBackgroundGenerateRequest,
     DescriptiveGenerateRequest,
     DescriptiveEvaluateRequest,
@@ -132,58 +131,105 @@ async def ask_summarize(req: SummarizeRequest, services: Services = Depends(get_
     summary = await services.summarize_history(req.history)
     return {"summary": summary}
 
-@app.post("/quiz/generate/stream")
-async def generate_quiz_stream(
-    req: QuizGenerateRequest,
+async def background_mixed_quiz_generator(req: QuizBackgroundGenerateRequest, services: Services):
+    """
+    Generate a mixed interactive quiz in background.
+    """
+    print(f"--- STARTING MIXED QUIZ GEN FOR {req.level_id} ---", flush=True)
+    try:
+        services.load_book(req.book_id)
+        if req.quiz_type == "chapter" and req.chapter_id:
+            nodes = services.quiz_generator._get_chapter_nodes(services._active_tree, req.chapter_id)
+            chapter_ids = [req.chapter_id]
+            default_title = f"{req.chapter_id} - Mixed Quiz"
+            duration = 20
+            passing = 60
+        elif req.quiz_type == "unit" and req.unit_chapters:
+            nodes = []
+            chapter_ids = []
+            for ch in req.unit_chapters:
+                nodes.extend(services.quiz_generator._get_chapter_nodes(services._active_tree, ch))
+                chapter_ids.append(ch)
+            default_title = f"Unit Test - Mixed Quiz"
+            duration = 45
+            passing = 50
+        else:  # full book
+            nodes = [n for n in services._active_tree.get_all_nodes() if not n.is_root and n.content.strip()]
+            chapter_ids = []
+            default_title = f"{req.book_id} - Full Book Mixed Quiz"
+            duration = 90
+            passing = 50
+
+        content_nodes = [n for n in nodes if n.content.strip()]
+        if not content_nodes:
+            print("No content available for mixed quiz generation", flush=True)
+            return
+
+        content_text = ""
+        for i, node in enumerate(content_nodes, 1):
+            content_text += f"--- SECTION {i}: {node.title or 'Untitled'} ---"
+            content_text += f"{node.content}"
+
+        prompt = services.prompts.generate_mixed_quiz(
+            content_text=content_text,
+            total_items=req.target_count,
+            book_id=req.book_id,
+        )
+
+        if not services.quiz_generator.llm:
+            print("LLM not configured", flush=True)
+            return
+
+        full_response = []
+        async for token in services.quiz_generator.llm.stream_complete(prompt, max_tokens=30000):
+            full_response.append(token)
+
+        response_text = "".join(full_response)
+
+        items = services.quiz_generator._parse_mixed_quiz_response(response_text, content_nodes)
+        items = items[:req.target_count]
+
+        from quiz.quiz_generator import InteractiveQuiz
+
+        mixed_quiz = InteractiveQuiz(
+            book_id=req.book_id,
+            title=req.title or default_title,
+            chapter_ids=chapter_ids,
+            items=items,
+            duration_minutes=duration,
+            passing_percent=passing,
+        )
+
+        quiz_data = mixed_quiz.to_dict()
+        quiz_id = f"quiz_{req.user_id}_{req.book_id}_{req.level_id}"
+
+        await asyncio.to_thread(
+            save_quiz_to_firestore, 
+            quiz_id, 
+            quiz_data, 
+            req.user_id,
+        )
+
+        print(f"Mixed quiz generation for {quiz_id} complete. Items: {len(items)}", flush=True)
+
+    except Exception as e:
+        print(f"Mixed quiz generation failed: {e}", flush=True)
+
+
+@app.post("/quiz/generate/interactive/background")
+async def generate_mixed_quiz_background(
+    req: QuizBackgroundGenerateRequest,
+    background_tasks: BackgroundTasks,
     services: Services = Depends(get_services),
 ):
     """
-    Generate a quiz (chapter, unit, or full book).
-    Pass book_id in request — book loaded on-demand.
-    Returns SSE stream with progress + final quiz JSON.
+    Generate a mixed interactive quiz (board-pattern MCQs + true/false + fill-blank + calc)
+    in the background and save to Firestore.
+    Returns 202 Accepted immediately.
     """
-    try:
-        services.load_book(req.book_id)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Book '{req.book_id}' not found: {str(e)}")
+    background_tasks.add_task(background_mixed_quiz_generator, req, services)
+    return {"status": "accepted", "message": "Mixed quiz generation started in background"}
 
-    async def quiz_generator() -> AsyncGenerator[str, None]:
-        yield sse_stream("status", {"message": "Starting quiz generation...", "step": 1})
-
-        async for event in services.quiz_generator.generate_quiz_streaming(
-            document_tree=services._active_tree,
-            quiz_type=req.quiz_type,
-            chapter_id=req.chapter_id,
-            unit_chapters=[{"id": c} for c in (req.unit_chapters or [])],
-            target_count=req.target_count,
-            duration_minutes=req.duration_minutes,
-            passing_percent=req.passing_percent,
-            book_id=req.book_id,
-            title=req.title,
-        ):
-            if event["type"] == "token":
-                yield sse_stream("token", {"token": event["token"]})
-            elif event["type"] == "error":
-                yield sse_stream("error", {"message": event["message"]})
-            elif event["type"] == "done":
-                quiz = event["quiz"]
-                yield sse_stream("done", {
-                    "quiz": quiz.to_dict(),
-                    "title": quiz.title,
-                    "question_count": len(quiz.questions),
-                    "duration_minutes": quiz.duration_minutes,
-                    "passing_percent": quiz.passing_percent,
-                })
-
-    return StreamingResponse(
-        quiz_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 async def background_lesson_generator(req: QuizBackgroundGenerateRequest, services: Services):
     print(f"--- STARTING BACKGROUND LESSON GEN FOR {req.level_id} ---", flush=True)
@@ -218,38 +264,6 @@ async def generate_lesson_background(
     background_tasks.add_task(background_lesson_generator, req, services)
     return {"status": "accepted", "message": "Lesson generation started in background"}
 
-async def background_interactive_generator(req: QuizBackgroundGenerateRequest, services: Services):
-    print(f"--- STARTING BACKGROUND INTERACTIVE QUIZ GEN FOR {req.level_id} ---", flush=True)
-    try:
-        services.load_book(req.book_id)
-        async for event in services.quiz_generator.generate_interactive_streaming(
-            document_tree=services._active_tree,
-            chapter_id=req.chapter_id or "",
-            target_count=req.target_count,
-            book_id=req.book_id,
-            title=req.title,
-        ):
-            if event["type"] == "done":
-                quiz = event["interactive_quiz"]
-                quiz_data = quiz.to_dict()
-                quiz_id = f"quiz_{req.user_id}_{req.book_id}_{req.level_id}"
-                await asyncio.to_thread(save_quiz_to_firestore, quiz_id, quiz_data, req.user_id)
-                print(f"Background interactive quiz generation for {quiz_id} complete.", flush=True)
-    except Exception as e:
-        print(f"Background interactive quiz generation failed: {e}", flush=True)
-
-@app.post("/quiz/generate/interactive/background")
-async def generate_interactive_background(
-    req: QuizBackgroundGenerateRequest,
-    background_tasks: BackgroundTasks,
-    services: Services = Depends(get_services),
-):
-    """
-    Generate an interactive quiz in the background and save to Firestore.
-    Returns 202 Accepted immediately.
-    """
-    background_tasks.add_task(background_interactive_generator, req, services)
-    return {"status": "accepted", "message": "Interactive quiz generation started in background"}
 
 @app.post("/descriptive/generate/stream")
 async def generate_descriptive_stream(
