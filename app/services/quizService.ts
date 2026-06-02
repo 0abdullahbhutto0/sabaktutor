@@ -5,7 +5,7 @@ import firestore from "@react-native-firebase/firestore";
 // In production, this should be an environment variable.
 //const BACKEND_URL = 'http://10.0.2.2:8000'; // Adjust if testing on physical device
 
-export const BACKEND_URL = "http://192.168.1.104:8000";
+export const BACKEND_URL = "http://192.168.100.44:8000";
 export const generateQuizAsync = async (chapterId: string, levelId: string, bookId: string) => {
   const currentUser = auth().currentUser;
   if (!currentUser) return;

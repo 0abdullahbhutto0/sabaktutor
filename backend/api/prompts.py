@@ -220,8 +220,8 @@ A: Local variables — instance (OOP), global (file), static (storage class) = s
 # Dynamic ratio configuration per subject
 # Format: (mcq_pct, true_false_pct, fill_in_blank_pct, mcq_calculation_pct, step_builder_pct)
 _QUIZ_RATIOS = {
-    "cs_9":    (60, 15, 20, 5, 0),    
-    "cs_10":   (60, 15, 20, 5, 0),   
+    "cs_9":    (60, 15, 20, 0, 0),    
+    "cs_10":   (60, 15, 20, 0, 0),   
     "maths_9": (30, 10, 10, 25, 25),  
     "maths_10":(30, 10, 10, 25, 25),   
     "phy_9":   (40, 15, 15, 30, 0),   
