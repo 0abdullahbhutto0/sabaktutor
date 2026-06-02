@@ -114,7 +114,7 @@ export default function MasteryMap() {
   const router = useRouter();
   const { subject, completedChapter } = useGlobalSearchParams<{ subject?: string; completedChapter?: string }>();
   const subjectStr = subject || "physics";
-  const bookId = subjectStr === "physics" ? "phy_9" : "cs_9";
+  const bookId = subjectStr === "maths" ? "maths_9" : subjectStr === "physics" ? "phy_9" : "cs_9";
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -126,6 +126,7 @@ export default function MasteryMap() {
   const [userId, setUserId] = React.useState<string | null>(null);
   
   const [showCompletionModal, setShowCompletionModal] = React.useState(false);
+  const shownModalsRef = React.useRef<Record<string, boolean>>({});
 
   const fireScale = useSharedValue(1);
   const fireOpacity = useSharedValue(0.8);
@@ -310,14 +311,16 @@ export default function MasteryMap() {
   useEffect(() => {
     if (completedChapter) {
       const level = completedChapter;
+      
+      if (shownModalsRef.current[level]) return;
+
       const lessonCompleted = progress[`lesson_${userId}_${bookId}_${level}`];
       const quizCompleted = progress[`quiz_${userId}_${bookId}_${level}`];
       const mockCompleted = progress[`descriptive_${userId}_${bookId}_${level}`];
       
       if (lessonCompleted && quizCompleted && !mockCompleted) {
+        shownModalsRef.current[level] = true;
         setShowCompletionModal(true);
-        // Clear param to prevent showing again on subsequent remounts
-        router.setParams({ completedChapter: undefined });
       }
     }
   }, [completedChapter, progress, userId, bookId]);

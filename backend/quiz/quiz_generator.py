@@ -198,6 +198,44 @@ class MCQCalculationItem:
 
 
 @dataclass
+class StepBuilderStep:
+    correct: str = ""
+    distractors: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "correct": self.correct,
+            "distractors": self.distractors
+        }
+
+
+@dataclass
+class StepBuilderItem:
+    id: str = ""
+    problem: str = ""
+    steps: List[StepBuilderStep] = field(default_factory=list)
+    type: str = "step_builder"
+    source_node_id: str = ""
+    difficulty: str = "medium"
+    marks: int = 2
+
+    def __post_init__(self):
+        if not self.id:
+            self.id = str(uuid.uuid4())[:8]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "problem": self.problem,
+            "steps": [s.to_dict() if hasattr(s, "to_dict") else s for s in self.steps],
+            "source_node_id": self.source_node_id,
+            "difficulty": self.difficulty,
+            "marks": self.marks,
+        }
+
+
+@dataclass
 class InteractiveQuiz:
     """Mixed quiz: board-pattern MCQs + true_false + fill_in_blank + mcq_calculation"""
     id: str = ""
@@ -236,6 +274,7 @@ class InteractiveQuiz:
                 "true_false": len([i for i in self.items if getattr(i, 'type', '') == "true_false"]),
                 "fill_in_blank": len([i for i in self.items if getattr(i, 'type', '') == "fill_in_blank"]),
                 "mcq_calculation": len([i for i in self.items if getattr(i, 'type', '') == "mcq_calculation"]),
+                "step_builder": len([i for i in self.items if getattr(i, 'type', '') == "step_builder"]),
             }
         }
 
@@ -521,6 +560,22 @@ class QuizGenerator:
                         options=item.get("options", []),
                         correct_index=item.get("correct_index", 0),
                         explanation=item.get("explanation", ""),
+                        source_node_id=source_node_id,
+                        difficulty=item.get("difficulty", "medium"),
+                        marks=item.get("marks", 2),
+                    ))
+
+                elif item_type == "step_builder":
+                    steps_data = item.get("steps", [])
+                    steps = []
+                    for sd in steps_data:
+                        steps.append(StepBuilderStep(
+                            correct=sd.get("correct", ""),
+                            distractors=sd.get("distractors", [])
+                        ))
+                    items.append(StepBuilderItem(
+                        problem=item.get("problem", ""),
+                        steps=steps,
                         source_node_id=source_node_id,
                         difficulty=item.get("difficulty", "medium"),
                         marks=item.get("marks", 2),

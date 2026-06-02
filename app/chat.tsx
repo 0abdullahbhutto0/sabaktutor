@@ -32,61 +32,7 @@ const ACTION_WORDS = [
   "Connecting the dots..."
 ];
 
-const FormattedText = ({ text, textStyle }: { text: string, textStyle: any }) => {
-  // Regex to match $$...$$, $...$, \[...\], \(...\)
-  const mathRegex = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g;
-  
-  const parts = text.split(mathRegex);
-
-  return (
-    <View style={{ flexDirection: 'column', width: '100%' }}>
-      {parts.map((part, index) => {
-        if (!part) return null;
-        
-        // Check if this part is a math formula
-        const isMath = part.startsWith('$') || part.startsWith('\\(') || part.startsWith('\\[');
-
-        if (isMath) {
-          // Render Math
-          return (
-             <View key={index} style={{ marginVertical: 4, overflow: 'hidden' }}>
-                <MathJaxSvg fontSize={textStyle.fontSize || 16} color={textStyle.color || '#fff'} fontCache={true}>
-                  {part}
-                </MathJaxSvg>
-             </View>
-          );
-        } else {
-          // Render Markdown
-          return (
-            <Markdown 
-              key={index}
-              style={{
-                body: { ...textStyle, margin: 0, color: textStyle.color || '#FFF' },
-                text: { color: textStyle.color || '#FFF' },
-                span: { color: textStyle.color || '#FFF' },
-                heading1: { fontSize: 24, fontWeight: 'bold', marginVertical: 8, color: textStyle.color || '#FFF' },
-                heading2: { fontSize: 20, fontWeight: 'bold', marginVertical: 8, color: textStyle.color || '#FFF' },
-                heading3: { fontSize: 18, fontWeight: 'bold', marginVertical: 8, color: textStyle.color || '#FFF' },
-                paragraph: { ...textStyle, marginTop: 4, marginBottom: 4, color: textStyle.color || '#FFF' },
-                list_item: { ...textStyle, marginVertical: 2, color: textStyle.color || '#FFF' },
-                bullet_list: { marginVertical: 4, color: textStyle.color || '#FFF' },
-                ordered_list: { marginVertical: 4, color: textStyle.color || '#FFF' },
-                strong: { fontWeight: 'bold', color: textStyle.color === '#FFFFFF' ? '#FFFFFF' : '#60A5FA' },
-                em: { fontStyle: 'italic', color: textStyle.color || '#FFF' },
-                code_inline: { backgroundColor: 'rgba(255,255,255,0.1)', color: textStyle.color || '#FFF', paddingHorizontal: 4, borderRadius: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
-                code_block: { backgroundColor: 'rgba(0,0,0,0.2)', color: textStyle.color || '#FFF', padding: 8, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', marginVertical: 8 },
-                fence: { backgroundColor: 'rgba(0,0,0,0.2)', color: textStyle.color || '#FFF', padding: 8, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', marginVertical: 8 },
-                blockquote: { borderLeftWidth: 2, borderLeftColor: '#60A5FA', paddingLeft: 12, fontStyle: 'italic', opacity: 0.8, color: textStyle.color || '#FFF' }
-              }}
-            >
-              {part}
-            </Markdown>
-          );
-        }
-      })}
-    </View>
-  );
-};
+import { FormattedText } from './components/FormattedText';
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
@@ -167,7 +113,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const { subject } = useLocalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
-  const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const book = subjectStr === 'maths' ? 'maths_9' : subjectStr === 'physics' ? 'phy_9' : 'cs_9';
   const insets = useSafeAreaInsets();
   
   const userId = auth().currentUser?.uid || 'guest';
@@ -175,7 +121,7 @@ export default function ChatScreen() {
   
   const [messages, setMessages] = useState<Message[]>(
     chatSessionStore[sessionKey]?.messages || [
-      { id: 'initial', role: 'assistant', content: `Hello! I'm your SabakTutor study buddy for ${subjectStr === 'physics' ? 'Physics' : 'Computer Science'}. What would you like to learn today?` }
+      { id: Date.now().toString(), role: 'assistant', content: `Hello! I'm your SabakTutor study buddy for ${subjectStr === 'physics' ? 'Physics' : subjectStr === 'maths' ? 'Maths' : 'Computer Science'}. What would you like to learn today?` }
     ]
   );
   const [input, setInput] = useState('');
@@ -328,7 +274,7 @@ export default function ChatScreen() {
 
   const handleNewChat = () => {
     const initial: Message[] = [
-      { id: Date.now().toString(), role: 'assistant', content: `Hello! I'm your SabakTutor study buddy for ${subjectStr === 'physics' ? 'Physics' : 'Computer Science'}. What would you like to learn today?` }
+      { id: Date.now().toString(), role: 'assistant', content: `Hello! I'm your SabakTutor study buddy for ${subjectStr === 'physics' ? 'Physics' : subjectStr === 'maths' ? 'Maths' : 'Computer Science'}. What would you like to learn today?` }
     ];
     setMessages(initial);
     setPreviousSummary('');

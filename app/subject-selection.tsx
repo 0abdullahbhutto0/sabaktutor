@@ -33,25 +33,26 @@ export default function SubjectSelection() {
       <Text style={styles.headerTitle}>SELECT YOUR SUBJECTS (SINDH TEXTBOOK BOARD)</Text>
       
       <View style={styles.list}>
-        {/* Maths - Disabled for now */}
+        {/* Maths */}
         <Pressable 
-          disabled={true}
-          style={[
+          style={({ pressed }) => [
             styles.subjectCard, 
-            { opacity: 0.5 }
+            selectedSubject === 'maths' && styles.subjectCardSelected,
+            pressed && styles.cardPressed
           ]}
+          onPress={() => setSelectedSubject('maths')}
         >
-          <View style={[styles.iconContainer, { backgroundColor: '#bbcbbb' }]}>
+          <View style={[styles.iconContainer, { backgroundColor: '#facc15' }]}>
             <MaterialCommunityIcons name="sigma" size={28} color="#091d2e" />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.subjectTitle}>Maths</Text>
-            <Text style={styles.subjectSubtitle}>Logic & Problem Solving (Coming Soon)</Text>
+            <Text style={styles.subjectSubtitle}>Logic & Problem Solving</Text>
           </View>
           <MaterialIcons 
-            name="radio-button-unchecked" 
+            name={selectedSubject === 'maths' ? "radio-button-checked" : "radio-button-unchecked"} 
             size={24} 
-            color="#bbcbbb" 
+            color={selectedSubject === 'maths' ? "#006d37" : "#d1e4fb"} 
           />
         </Pressable>
 

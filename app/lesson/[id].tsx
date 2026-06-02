@@ -7,6 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import ChunkyButton from '../components/ChunkyButton';
+import { FormattedText } from '../components/FormattedText';
 import { CHAPTER_TITLES, generateQuizAsync, BOOK_CHAPTERS } from '../services/quizService';
 
 const { width } = Dimensions.get('window');
@@ -16,7 +17,7 @@ export default function LessonScreen() {
   const level = typeof id === 'string' ? id : 'ch1';
   const subjectStr = typeof subject === 'string' ? subject : 'physics';
   const insets = useSafeAreaInsets();
-  const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const book = subjectStr === 'maths' ? 'maths_9' : subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [flashcards, setFlashcards] = useState<any[]>([]);
   const chapterName = CHAPTER_TITLES[subjectStr]?.[level] || `Chapter ${level.replace('ch', '')}`;
@@ -238,7 +239,10 @@ export default function LessonScreen() {
           <Animated.View style={[styles.card, frontAnimatedStyle, { zIndex: isFlipped ? 0 : 1 }]}>
             <TouchableOpacity activeOpacity={1} onPress={flipCard} style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={styles.cardLabel}>TERM / FORMULA</Text>
-              <Text style={styles.cardTerm}>{currentCard.title || currentCard.term || currentCard.formula}</Text>
+              <FormattedText 
+                text={`**${currentCard.title || currentCard.term || currentCard.formula}**`} 
+                textStyle={styles.cardTerm} 
+              />
               <View style={styles.tapToFlip}>
                 <MaterialIcons name="flip" size={20} color="#94A3B8" />
                 <Text style={styles.tapText}>Tap to flip</Text>
@@ -252,7 +256,10 @@ export default function LessonScreen() {
             </TouchableOpacity>
             
             <ScrollView style={styles.cardScrollView} contentContainerStyle={styles.cardScrollContent} showsVerticalScrollIndicator={true}>
-              <Text style={styles.cardDefinition}>{currentCard.content || currentCard.definition || currentCard.explanation}</Text>
+              <FormattedText 
+                text={`**${currentCard.content || currentCard.definition || currentCard.explanation}**`} 
+                textStyle={styles.cardDefinition} 
+              />
             </ScrollView>
 
             <TouchableOpacity activeOpacity={1} onPress={flipCard} style={{ width: '100%', alignItems: 'center', paddingBottom: 20 }}>
@@ -403,8 +410,6 @@ const styles = StyleSheet.create({
   },
   cardScrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     paddingVertical: 16,
   },
   tapToFlip: {

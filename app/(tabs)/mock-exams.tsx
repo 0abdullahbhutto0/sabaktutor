@@ -17,7 +17,7 @@ export default function MockExams() {
   const router = useRouter();
   const { subject } = useGlobalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
-  const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const bookId = subjectStr === 'maths' ? 'maths_9' : subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [progress, setProgress] = useState<Record<string, boolean>>({});
   const [userId, setUserId] = useState<string | null>(null);
