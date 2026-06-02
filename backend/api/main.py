@@ -332,12 +332,12 @@ async def evaluate_descriptive_stream(
     Client passes back the FULL QUIZ (from generate response) + student answers.
     """
     try:
-        quiz = DescriptiveQuiz.from_dict(req.quiz.dict())
+        quiz = DescriptiveQuiz.from_dict(req.quiz)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid quiz data: {str(e)}")
 
     try:
-        services.load_book(req.quiz.book_id)
+        services.load_book(quiz.book_id)
     except Exception:
         pass
     

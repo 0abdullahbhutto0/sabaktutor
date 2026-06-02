@@ -452,7 +452,7 @@ export default function QuizScreen() {
               const sortedOptions = [...allOptions].sort();
 
               return (
-                <View style={{ marginTop: 16 }}>
+                <View style={{ marginTop: 16, gap: 12 }}>
                   <Text style={{ color: '#94A3B8', marginBottom: 12, textAlign: 'center' }}>
                     Step {currentBuilderStep + 1} of {currentQuestion.steps.length}
                   </Text>

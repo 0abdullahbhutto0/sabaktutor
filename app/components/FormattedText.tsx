@@ -112,9 +112,11 @@ export const FormattedText = ({ text, textStyle }: { text: string; textStyle: an
     );
   }
 
+  const isCentered = flatStyle.textAlign === 'center';
+
   // Render segments: text parts via Markdown, math parts via MathJaxSvg
   return (
-    <View style={{ width: '100%' }}>
+    <View style={{ width: '100%', alignItems: isCentered ? 'center' : undefined }}>
       {segments.map((seg, index) => {
         if (seg.type === 'math') {
           if (seg.display) {

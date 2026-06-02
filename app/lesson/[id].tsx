@@ -240,7 +240,7 @@ export default function LessonScreen() {
             <TouchableOpacity activeOpacity={1} onPress={flipCard} style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={styles.cardLabel}>TERM / FORMULA</Text>
               <FormattedText 
-                text={`**${currentCard.title || currentCard.term || currentCard.formula}**`} 
+                text={`**${currentCard.title || currentCard.term || currentCard.formula || ''}**`} 
                 textStyle={styles.cardTerm} 
               />
               <View style={styles.tapToFlip}>
@@ -257,7 +257,7 @@ export default function LessonScreen() {
             
             <ScrollView style={styles.cardScrollView} contentContainerStyle={styles.cardScrollContent} showsVerticalScrollIndicator={true}>
               <FormattedText 
-                text={`**${currentCard.content || currentCard.definition || currentCard.explanation}**`} 
+                text={`**${currentCard.content || currentCard.definition || currentCard.explanation || ''}**`} 
                 textStyle={styles.cardDefinition} 
               />
             </ScrollView>

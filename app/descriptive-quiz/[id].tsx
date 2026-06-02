@@ -14,6 +14,9 @@ import firestore from '@react-native-firebase/firestore';
 
 import ChunkyButton from '../components/ChunkyButton';
 import { BACKEND_URL, CHAPTER_TITLES, BOOK_CHAPTERS } from '../services/quizService';
+import { ScratchpadModal } from '../components/ScratchpadModal';
+import { MathLiveInput } from '../components/MathLiveInput';
+import { FormattedText } from '../components/FormattedText';
 
 const { width } = Dimensions.get('window');
 
@@ -69,6 +72,9 @@ export default function DescriptiveQuizScreen() {
   const [phase, setPhase] = useState<'generating' | 'taking' | 'evaluating' | 'results'>('generating');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  
+  const [scratchpadVisible, setScratchpadVisible] = useState(false);
+  const [scratchpadPaths, setScratchpadPaths] = useState<string[][]>([]);
   
   const [evaluation, setEvaluation] = useState<BatchEvaluation | null>(null);
   const [evalStreamText, setEvalStreamText] = useState("");
@@ -185,13 +191,14 @@ export default function DescriptiveQuizScreen() {
               if (data.token) {
                 setEvalStreamText(prev => prev + data.token);
               } else if (data.total_marks_obtained !== undefined) {
+                const evals = data.evaluation?.evaluations || data.evaluations || [];
                 finalEval = {
                   total_marks_obtained: data.total_marks_obtained,
                   total_max_marks: data.total_max_marks,
                   percentage: data.percentage,
                   passed: data.passed,
-                  overall_feedback: data.overall_feedback,
-                  evaluations: data.evaluations || []
+                  overall_feedback: data.overall_feedback || data.evaluation?.overall_feedback || '',
+                  evaluations: evals,
                 };
               }
             } catch (e) {}
@@ -316,32 +323,78 @@ export default function DescriptiveQuizScreen() {
               {evaluation.total_marks_obtained} / {evaluation.total_max_marks}
             </Text>
             <Text style={styles.percentText}>{evaluation.percentage}% - {evaluation.passed ? 'PASSED' : 'FAILED'}</Text>
-            <Text style={styles.feedbackText}>{evaluation.overall_feedback}</Text>
+            <FormattedText text={evaluation.overall_feedback} textStyle={styles.feedbackText} />
           </View>
           
           <Text style={styles.sectionHeader}>Question Breakdown</Text>
-          {evaluation.evaluations.map((ev, idx) => {
-            const q = allQuestions.find(q => q.id === ev.question_id);
+          {evaluation.evaluations.map((ev: any, idx: number) => {
+            // Use index to match — the API returns evaluations in the same order as allQuestions
+            const q = allQuestions[idx];
             if (!q) return null;
+            const studentAnswer = answers[q.id] || '';
+            const hasMathProps = ev.formula_correct !== undefined || ev.unit_correct !== undefined || ev.calculation_correct !== undefined;
+
             return (
-              <View key={ev.question_id} style={styles.qResultCard}>
-                <Text style={styles.qStem}>Q{idx + 1}: {q.stem}</Text>
-                <Text style={styles.qMarks}>Marks: {ev.marks_obtained} / {ev.max_marks}</Text>
-                <Text style={styles.qFeedback}>{ev.feedback}</Text>
+              <View key={idx} style={styles.qResultCard}>
+                <View style={styles.qResultHeader}>
+                  <Text style={styles.qResultTitle}>Question {idx + 1}</Text>
+                  <View style={styles.marksBadge}>
+                    <Text style={styles.marksBadgeText}>{ev.marks_obtained} / {ev.max_marks}</Text>
+                  </View>
+                </View>
+                <FormattedText text={q.stem} textStyle={styles.qStem} />
+
+                <Text style={[styles.qResultLabel, { marginTop: 16, marginBottom: 8 }]}>YOUR ANSWER</Text>
+                <View style={styles.studentAnswerBox}>
+                  <FormattedText text={studentAnswer || '(No answer provided)'} textStyle={styles.studentAnswerText} />
+                </View>
+
+                <Text style={[styles.qResultLabel, { marginTop: 16, marginBottom: 8 }]}>FEEDBACK</Text>
+                <FormattedText text={ev.feedback} textStyle={styles.qFeedback} />
+
+                {ev.suggestions ? (
+                  <View style={styles.suggestionsBox}>
+                    <MaterialIcons name="lightbulb-outline" size={16} color="#facc15" />
+                    <Text style={styles.suggestionsText}>{ev.suggestions}</Text>
+                  </View>
+                ) : null}
+
+                {hasMathProps && (
+                  <View style={styles.mathCheckList}>
+                    {ev.formula_correct !== undefined && (
+                      <View style={styles.mathCheckRow}>
+                        <MaterialIcons name={ev.formula_correct ? "check-circle" : "cancel"} size={16} color={ev.formula_correct ? "#22c55e" : "#ef4444"} />
+                        <Text style={styles.mathCheckText}>Formula</Text>
+                      </View>
+                    )}
+                    {ev.calculation_correct !== undefined && (
+                      <View style={styles.mathCheckRow}>
+                        <MaterialIcons name={ev.calculation_correct ? "check-circle" : "cancel"} size={16} color={ev.calculation_correct ? "#22c55e" : "#ef4444"} />
+                        <Text style={styles.mathCheckText}>Calculation</Text>
+                      </View>
+                    )}
+                    {ev.unit_correct !== undefined && (
+                      <View style={styles.mathCheckRow}>
+                        <MaterialIcons name={ev.unit_correct ? "check-circle" : "cancel"} size={16} color={ev.unit_correct ? "#22c55e" : "#ef4444"} />
+                        <Text style={styles.mathCheckText}>Unit / Final</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
                 
-                {ev.missing_points.length > 0 && (
-                  <View style={styles.pointsBox}>
-                    <Text style={styles.pointsTitle}>Missed Points:</Text>
-                    {ev.missing_points.map((pt, i) => (
-                      <Text key={i} style={styles.missingPoint}>• {pt}</Text>
+                {ev.correct_points && ev.correct_points.length > 0 && (
+                  <View style={[styles.pointsBox, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderWidth: 1, borderColor: 'rgba(34, 197, 94, 0.3)' }]}>
+                    <Text style={[styles.pointsTitle, { color: '#4ade80' }]}>✓ What you got right</Text>
+                    {ev.correct_points.map((pt: string, i: number) => (
+                      <Text key={i} style={styles.correctPoint}>• {pt}</Text>
                     ))}
                   </View>
                 )}
-                {ev.correct_points.length > 0 && (
-                  <View style={[styles.pointsBox, { backgroundColor: '#f0fdf4' }]}>
-                    <Text style={[styles.pointsTitle, { color: '#166534' }]}>Correct Points:</Text>
-                    {ev.correct_points.map((pt, i) => (
-                      <Text key={i} style={styles.correctPoint}>• {pt}</Text>
+                {ev.missing_points && ev.missing_points.length > 0 && (
+                  <View style={[styles.pointsBox, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' }]}>
+                    <Text style={[styles.pointsTitle, { color: '#f87171' }]}>✗ What was missed</Text>
+                    {ev.missing_points.map((pt: string, i: number) => (
+                      <Text key={i} style={styles.missingPoint}>• {pt}</Text>
                     ))}
                   </View>
                 )}
@@ -366,7 +419,96 @@ export default function DescriptiveQuizScreen() {
   // -------------------------------------------------------------
   const currentQuestion = allQuestions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === allQuestions.length - 1;
+  const isMaths = subjectStr === 'maths';
+  const hasAnswer = (answers[currentQuestion?.id || ''] || '').trim().length > 0;
 
+  // Shared bottom nav bar
+  const BottomNavBar = (
+    <View style={styles.bottomNav}>
+      {isMaths ? <View style={{ width: 56, height: 56 }} /> : (
+        <TouchableOpacity 
+          style={[styles.navBtn, currentQuestionIndex === 0 && { opacity: 0.5 }]}
+          disabled={currentQuestionIndex === 0}
+          onPress={() => setCurrentQuestionIndex(i => i - 1)}
+        >
+          <MaterialIcons name="chevron-left" size={32} color="#FFF" />
+        </TouchableOpacity>
+      )}
+      
+      {isLastQuestion ? (
+        <ChunkyButton 
+          title="Submit Paper" 
+          onPress={submitForEvaluation}
+          disabled={!hasAnswer}
+          style={{ flex: 1, marginHorizontal: 16 }}
+          color="#a855f7"
+          shadowColor="#7e22ce"
+        />
+      ) : (
+        <TouchableOpacity 
+          style={[styles.navBtn, !hasAnswer && { opacity: 0.5 }]}
+          onPress={() => setCurrentQuestionIndex(i => i + 1)}
+          disabled={!hasAnswer}
+        >
+          <MaterialIcons name="chevron-right" size={32} color="#FFF" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  // --- MATHS LAYOUT: compact question card + full MathLive editor ---
+  if (isMaths) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialIcons name="close" size={24} color="#94A3B8" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Descriptive Challenge</Text>
+          <Text style={styles.progressText}>{currentQuestionIndex + 1} / {allQuestions.length}</Text>
+        </View>
+
+        {/* Compact question card */}
+        <View style={styles.mathQuestionCard}>
+          <View style={styles.qHeader}>
+            <View style={styles.qSectionBadge}>
+              <Text style={styles.qSectionText}>Section {currentQuestion?.section}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity 
+                style={styles.inlineScratchBtn}
+                onPress={() => setScratchpadVisible(true)}
+              >
+                <MaterialIcons name="edit" size={16} color="#FFF" />
+                <Text style={styles.inlineScratchText}>Scratchpad</Text>
+              </TouchableOpacity>
+              <Text style={styles.qMarksText}>{currentQuestion?.marks} Marks</Text>
+            </View>
+          </View>
+          <FormattedText text={currentQuestion?.stem || ''} textStyle={styles.mathQStem} />
+        </View>
+
+        {/* MathLive editor fills remaining space. Key prop forces remount on question change */}
+        <MathLiveInput
+          key={currentQuestion?.id || 'empty'}
+          value={answers[currentQuestion?.id || ''] || ''}
+          onChangeText={(text) => setAnswers(prev => ({ ...prev, [currentQuestion!.id]: text }))}
+        />
+
+        <ScratchpadModal
+          visible={scratchpadVisible}
+          onClose={() => setScratchpadVisible(false)}
+          paths={scratchpadPaths}
+          setPaths={setScratchpadPaths}
+        />
+        
+        {BottomNavBar}
+      </SafeAreaView>
+    );
+  }
+
+  // --- NON-MATHS LAYOUT: original ScrollView + TextInput ---
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
       <StatusBar style="light" />
@@ -390,7 +532,7 @@ export default function DescriptiveQuizScreen() {
               </View>
               <Text style={styles.qMarksText}>{currentQuestion?.marks} Marks</Text>
             </View>
-            <Text style={styles.qStemLarge}>{currentQuestion?.stem}</Text>
+            <FormattedText text={currentQuestion?.stem || ''} textStyle={styles.qStemLarge} />
           </View>
           
           <Text style={styles.inputLabel}>Your Answer:</Text>
@@ -407,32 +549,7 @@ export default function DescriptiveQuizScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
         
-        <View style={styles.bottomNav}>
-          <TouchableOpacity 
-            style={[styles.navBtn, currentQuestionIndex === 0 && { opacity: 0.5 }]}
-            disabled={currentQuestionIndex === 0}
-            onPress={() => setCurrentQuestionIndex(i => i - 1)}
-          >
-            <MaterialIcons name="chevron-left" size={32} color="#FFF" />
-          </TouchableOpacity>
-          
-          {isLastQuestion ? (
-            <ChunkyButton 
-              title="Submit Paper" 
-              onPress={submitForEvaluation}
-              style={{ flex: 1, marginHorizontal: 16 }}
-              color="#a855f7"
-              shadowColor="#7e22ce"
-            />
-          ) : (
-            <TouchableOpacity 
-              style={styles.navBtn}
-              onPress={() => setCurrentQuestionIndex(i => i + 1)}
-            >
-              <MaterialIcons name="chevron-right" size={32} color="#FFF" />
-            </TouchableOpacity>
-          )}
-        </View>
+        {BottomNavBar}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -523,6 +640,37 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 30,
   },
+  mathQuestionCard: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  mathQStem: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  inlineScratchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#a855f7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  inlineScratchText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
   inputLabel: {
     color: '#94A3B8',
     fontSize: 14,
@@ -606,39 +754,125 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
+  qResultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  qResultTitle: {
+    color: '#3B82F6',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  marksBadge: {
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#a855f7',
+  },
+  marksBadgeText: {
+    color: '#c084fc',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  qResultLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   qStem: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
   },
+  studentAnswerBox: {
+    backgroundColor: '#0F172A',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  studentAnswerText: {
+    color: '#E2E8F0',
+    fontSize: 15,
+  },
   qMarks: {
     color: '#a855f7',
     fontWeight: 'bold',
-    marginBottom: 8,
   },
   qFeedback: {
     color: '#cbd5e1',
     lineHeight: 22,
     marginBottom: 12,
   },
+  mathCheckList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  mathCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  mathCheckText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginLeft: 6,
+    fontWeight: '600',
+  },
   pointsBox: {
-    backgroundColor: '#fef2f2',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 10,
+    marginTop: 12,
   },
   pointsTitle: {
-    color: '#991b1b',
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 6,
+    fontSize: 13,
   },
   missingPoint: {
-    color: '#991b1b',
+    color: '#fca5a5',
     marginLeft: 8,
+    lineHeight: 22,
   },
   correctPoint: {
-    color: '#166534',
+    color: '#86efac',
     marginLeft: 8,
-  }
+    lineHeight: 22,
+  },
+  suggestionsBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(250, 204, 21, 0.1)',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(250, 204, 21, 0.3)',
+  },
+  suggestionsText: {
+    color: '#fde68a',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 22,
+    fontSize: 13,
+  },
 });
