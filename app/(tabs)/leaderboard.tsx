@@ -22,29 +22,42 @@ export default function Leaderboard() {
   const currentUserId = auth().currentUser?.uid;
 
   useEffect(() => {
-    // We use onSnapshot for real-time leaderboard updates
-    const unsubscribe = firestore()
-      .collection('users')
-      .orderBy('energyPoints', 'desc')
-      .limit(50)
-      .onSnapshot((snapshot) => {
-        const fetchedUsers: UserData[] = [];
-        snapshot.docs.forEach((doc, index) => {
-          fetchedUsers.push({
-            id: doc.id,
-            username: doc.data().username || 'Anonymous',
-            energyPoints: doc.data().energyPoints || 0,
-            rank: index + 1
+    let unsubscribeSnapshot: () => void;
+
+    // Wait for auth to be ready, otherwise we get permission-denied
+    const unsubscribeAuth = auth().onAuthStateChanged((user) => {
+      if (user) {
+        unsubscribeSnapshot = firestore()
+          .collection('users')
+          .orderBy('energyPoints', 'desc')
+          .limit(50)
+          .onSnapshot((snapshot) => {
+            const fetchedUsers: UserData[] = [];
+            snapshot.docs.forEach((doc, index) => {
+              fetchedUsers.push({
+                id: doc.id,
+                username: doc.data().username || 'Anonymous',
+                energyPoints: doc.data().energyPoints || 0,
+                rank: index + 1
+              });
+            });
+            setUsers(fetchedUsers);
+            setLoading(false);
+          }, (error) => {
+            console.error("Error fetching leaderboard:", error);
+            setLoading(false);
           });
-        });
-        setUsers(fetchedUsers);
+      } else {
         setLoading(false);
-      }, (error) => {
-        console.error("Error fetching leaderboard:", error);
-        setLoading(false);
-      });
-      
-    return () => unsubscribe();
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
   }, []);
 
   const renderItem = ({ item }: { item: UserData }) => {

@@ -61,7 +61,7 @@ export default function DescriptiveQuizScreen() {
   const subjectStr = typeof subject === 'string' ? subject : 'physics';
   const insets = useSafeAreaInsets();
   
-  const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const bookId = subjectStr === 'maths' ? 'maths_9' : subjectStr === 'physics' ? 'phy_9' : 'cs_9';
   const chapterName = CHAPTER_TITLES[subjectStr]?.[level] || `Chapter ${level.replace('ch', '')}`;
   const chapterId = BOOK_CHAPTERS[subjectStr]?.[level];
   

@@ -218,22 +218,22 @@ A: Local variables — instance (OOP), global (file), static (storage class) = s
 # =============================================================================
 
 # Dynamic ratio configuration per subject
-# Format: (mcq_pct, true_false_pct, fill_in_blank_pct, mcq_calculation_pct)
+# Format: (mcq_pct, true_false_pct, fill_in_blank_pct, mcq_calculation_pct, step_builder_pct)
 _QUIZ_RATIOS = {
-    "cs_9":    (60, 15, 20, 5),    
-    "cs_10":   (60, 15, 20, 5),   
-    "maths_9": (30, 10, 10, 50),  
-    "maths_10":(30, 10, 10, 50),   
-    "phy_9":   (40, 15, 15, 30),   
-    "phy_10":  (40, 15, 15, 30),   
+    "cs_9":    (60, 15, 20, 5, 0),    
+    "cs_10":   (60, 15, 20, 5, 0),   
+    "maths_9": (30, 10, 10, 25, 25),  
+    "maths_10":(30, 10, 10, 25, 25),   
+    "phy_9":   (40, 15, 15, 30, 0),   
+    "phy_10":  (40, 15, 15, 30, 0),   
 }
 
 def _get_quiz_ratio(book_id: str) -> tuple:
-    """Return (mcq%, true_false%, fill_blank%, calc%) for a given book_id."""
+    """Return (mcq%, true_false%, fill_blank%, calc%, step_builder%) for a given book_id."""
     for key in _QUIZ_RATIOS:
         if key in book_id:
             return _QUIZ_RATIOS[key]
-    return (50, 20, 15, 15)
+    return (40, 20, 15, 15, 10)
 
 
 def _get_patterns_for_book(book_id: str) -> str:
@@ -292,7 +292,7 @@ Instructions:
         Ratios adapt per book: CS=theory-heavy, Maths=calc-heavy, Physics=balanced.
         """
         patterns = _get_patterns_for_book(book_id)
-        mcq_pct, tf_pct, fb_pct, calc_pct = _get_quiz_ratio(book_id)
+        mcq_pct, tf_pct, fb_pct, calc_pct, step_builder_pct = _get_quiz_ratio(book_id)
 
         return f"""You are a Sindh Board examiner creating a mixed-format quiz for Grade 9/10.
 
@@ -311,6 +311,7 @@ RULES:
    - {tf_pct}% True/False: test common misconceptions
    - {fb_pct}% Fill-in-Blank: key terms, formulas, definitions
    - {calc_pct}% MCQ Calculation: step-by-step numerical problems
+   - {step_builder_pct}% Step Builder: interactive step-by-step math problem solving
 3. Every question must trace directly to SOURCE CONTENT. No external knowledge.
 4. For MCQs: use plausible distractors from the same concept family. Test understanding, not memorization.
 5. For True/False: statements should be tricky — common student misconceptions.
@@ -360,6 +361,20 @@ For MCQ Calculation:
   "options": ["A", "B", "C", "D"],
   "correct_index": 0,
   "explanation": "Step by step solution",
+  "difficulty": "easy|medium|hard",
+  "marks": 2
+}}
+
+For Step Builder:
+{{
+  "type": "step_builder",
+  "problem": "Solve for x: 3x - 5 = 10",
+  "steps": [
+    {{
+      "correct": "3x = 15",
+      "distractors": ["3x = 5", "x - 5 = 3"]
+    }}
+  ],
   "difficulty": "easy|medium|hard",
   "marks": 2
 }}

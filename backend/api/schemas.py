@@ -27,8 +27,8 @@ class SummarizeRequest(BaseModel):
 
 class QuizBackgroundGenerateRequest(BaseModel):
     """Request for mixed quiz generation (background task).
-
-    Generates: 60% board-pattern MCQ + 20% true_false + 10% fill_in_blank + 10% mcq_calculation
+    
+    Generates dynamic ratio based on subject (MCQ, True/False, Fill in Blank, MCQ Calculation, Step Builder).
     """
     user_id: str
     book_id: str

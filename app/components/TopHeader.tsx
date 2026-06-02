@@ -127,10 +127,8 @@ export default function TopHeader({ subjectStr }: { subjectStr: string }) {
             size={24}
             color="#1e3a8a"
           />
-          <Text
-            style={{ color: "#1e3a8a", fontSize: 16, fontWeight: "bold" }}
-          >
-            {subjectStr === "physics" ? "Physics" : "Comp Sci"}
+          <Text style={{ color: "#1e3a8a", fontSize: 16, fontWeight: "bold" }}>
+            {subjectStr === "physics" ? "Physics" : subjectStr === "maths" ? "Maths" : "Comp Sci"}
           </Text>
         </ChunkyButton>
       </View>

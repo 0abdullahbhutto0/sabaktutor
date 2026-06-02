@@ -124,7 +124,7 @@ class Services:
         if previous_summary:
             system_msg += f"\n\nPREVIOUS CONVERSATION SUMMARY:\n{previous_summary}"
             
-        async for token in self.llm.stream_complete(prompt, system=system_msg, history=history):
+        async for token in self.llm.stream_complete(prompt, system=system_msg, history=[{"role": msg.role, "content": msg.content} for msg in history]):
             yield token
 
     async def summarize_history(self, history: list) -> str:
@@ -132,7 +132,7 @@ class Services:
         if self.llm is None or not history:
             return ""
             
-        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history])
+        history_text = "\n".join([f"{msg.role}: {msg.content}" for msg in history])
         prompt = self._prompts.generate_summary(history_text, max_sentences=3)
         system_msg = "You are a highly capable AI that compresses chat logs into extremely dense, informative summaries."
         

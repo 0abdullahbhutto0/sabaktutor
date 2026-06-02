@@ -1,6 +1,6 @@
 import { withLayoutContext } from 'expo-router';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import { useLocalSearchParams } from 'expo-router';
+import { useGlobalSearchParams } from 'expo-router';
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,9 +15,9 @@ const MaterialTopTabs = withLayoutContext(Navigator);
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { subject } = useLocalSearchParams<{ subject?: string }>();
+  const { subject } = useGlobalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
-  const bookId = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const bookId = subjectStr === 'maths' ? 'maths_9' : subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [progress, setProgress] = useState<Record<string, boolean>>({});
   const [userId, setUserId] = useState<string | null>(null);

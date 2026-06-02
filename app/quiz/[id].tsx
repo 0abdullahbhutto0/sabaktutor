@@ -8,13 +8,15 @@ import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import ChunkyButton from '../components/ChunkyButton';
 import { CHAPTER_TITLES, generateQuizAsync, BOOK_CHAPTERS } from '../services/quizService';
+import { FormattedText } from '../components/FormattedText';
+import { ScratchpadModal } from '../components/ScratchpadModal';
 
 export default function QuizScreen() {
   const { id, subject } = useLocalSearchParams();
   const quizId = typeof id === 'string' ? id : 'ch1';
   const subjectStr = typeof subject === 'string' ? subject : 'physics';
   const insets = useSafeAreaInsets();
-  const book = subjectStr === 'physics' ? 'phy_9' : 'cs_9';
+  const book = subjectStr === 'maths' ? 'maths_9' : subjectStr === 'physics' ? 'phy_9' : 'cs_9';
 
   const [questions, setQuestions] = useState<any[]>([]);
   const chapterName = CHAPTER_TITLES[subjectStr]?.[quizId] || `Chapter ${quizId.replace('ch', '')}`;
@@ -27,6 +29,10 @@ export default function QuizScreen() {
   const [hearts, setHearts] = useState(3);
   const [showResults, setShowResults] = useState(false);
   
+  // Scratchpad State
+  const [scratchpadVisible, setScratchpadVisible] = useState(false);
+  const [scratchpadPaths, setScratchpadPaths] = useState<string[][]>([]);
+
   // For standard MCQs and True/False
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
@@ -34,6 +40,9 @@ export default function QuizScreen() {
   const [fillBlankText, setFillBlankText] = useState("");
   const [isFillBlankChecked, setIsFillBlankChecked] = useState(false);
   const [fillBlankCorrect, setFillBlankCorrect] = useState(false);
+
+  // For step_builder
+  const [currentBuilderStep, setCurrentBuilderStep] = useState(0);
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -122,11 +131,15 @@ export default function QuizScreen() {
         return;
       }
 
+      setSelectedOptionIndex(null);
+      setFillBlankText("");
+      setIsFillBlankChecked(false);
+      setFillBlankCorrect(false);
+      setCurrentBuilderStep(0);
+      setScratchpadPaths([]);
+
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex(currentQuestionIndex + 1);
-        setSelectedOptionIndex(null);
-        setFillBlankText("");
-        setIsFillBlankChecked(false);
       } else {
         setShowResults(true);
         const passed = (newScore / questions.length) >= 0.6;
@@ -148,6 +161,30 @@ export default function QuizScreen() {
     
     const isCorrect = index === correctIdx;
     nextQuestion(isCorrect);
+  };
+
+  const handleStepBuilderSelect = (optionText: string, correctText: string) => {
+    if (selectedOptionIndex !== null) return;
+    const isCorrect = optionText === correctText;
+    
+    if (isCorrect) {
+      // Move to next step
+      const currentQuestion = questions[currentQuestionIndex];
+      const totalSteps = currentQuestion.steps?.length || 0;
+      
+      if (currentBuilderStep < totalSteps - 1) {
+        // Not the last step
+        setCurrentBuilderStep(currentBuilderStep + 1);
+      } else {
+        // Last step completed successfully!
+        setSelectedOptionIndex(1); // just a flag that we finished
+        nextQuestion(true);
+      }
+    } else {
+      // Wrong step! Lose a heart, mark as incorrect, and move to next question as failure
+      setSelectedOptionIndex(-1); // flag failure
+      nextQuestion(false);
+    }
   };
 
   const handleCheckFillBlank = () => {
@@ -319,12 +356,13 @@ export default function QuizScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         
         <View style={styles.questionCard}>
-          <Text style={styles.questionText}>
-            {qType === 'true_false' ? currentQuestion.statement : 
+          <FormattedText 
+            text={`**${qType === 'true_false' ? currentQuestion.statement : 
              qType === 'fill_in_blank' ? `${currentQuestion.sentence_before} _________ ${currentQuestion.sentence_after}` :
-             qType === 'mcq_calculation' ? currentQuestion.problem :
-             (currentQuestion.stem || currentQuestion.question)}
-          </Text>
+             (qType === 'mcq_calculation' || qType === 'step_builder') ? currentQuestion.problem :
+             (currentQuestion.stem || currentQuestion.question)}**`} 
+            textStyle={styles.questionText}
+          />
         </View>
 
         {(qType === 'mcq' || qType === 'true_false' || qType === 'mcq_calculation') && (
@@ -343,13 +381,14 @@ export default function QuizScreen() {
                   activeOpacity={0.7}
                   disabled={selectedOptionIndex !== null}
                 >
-                  <Text style={[
-                    styles.optionText,
-                    selectedOptionIndex !== null && index === correctIdx && styles.optionTextCorrect,
-                    selectedOptionIndex === index && index !== correctIdx && styles.optionTextIncorrect
-                  ]}>
-                    {optText}
-                  </Text>
+                  <FormattedText 
+                    text={`**${optText}**`}
+                    textStyle={[
+                      styles.optionText,
+                      selectedOptionIndex !== null && index === correctIdx && styles.optionTextCorrect,
+                      selectedOptionIndex === index && index !== correctIdx && styles.optionTextIncorrect
+                    ]}
+                  />
                 </TouchableOpacity>
               )
             })}
@@ -393,7 +432,68 @@ export default function QuizScreen() {
           </View>
         )}
 
+        {qType === 'step_builder' && currentQuestion.steps && (
+          <View style={styles.optionsContainer}>
+            {/* Render completed steps */}
+            {currentQuestion.steps.slice(0, currentBuilderStep).map((step: any, idx: number) => (
+              <View key={`completed-${idx}`} style={[styles.optionButton, styles.optionCorrect, { marginBottom: 12 }]}>
+                <FormattedText text={`**${step.correct}**`} textStyle={[styles.optionText, styles.optionTextCorrect]} />
+                <MaterialIcons name="check-circle" size={20} color="#4ADE80" style={{ position: 'absolute', right: 16, top: 16 }} />
+              </View>
+            ))}
+
+            {/* Render current step options if we are not done */}
+            {currentBuilderStep < (currentQuestion.steps?.length || 0) && (() => {
+              const currentStep = currentQuestion.steps[currentBuilderStep];
+              // Mix correct and distractors
+              const allOptions = [currentStep.correct, ...(currentStep.distractors || [])];
+              // Note: Ideally these should be shuffled once, but for simplicity here we just render them
+              // If we want consistent shuffling, we could sort by alphabetical or hash
+              const sortedOptions = [...allOptions].sort();
+
+              return (
+                <View style={{ marginTop: 16 }}>
+                  <Text style={{ color: '#94A3B8', marginBottom: 12, textAlign: 'center' }}>
+                    Step {currentBuilderStep + 1} of {currentQuestion.steps.length}
+                  </Text>
+                  {sortedOptions.map((optText: string, idx: number) => (
+                    <TouchableOpacity
+                      key={`opt-${idx}`}
+                      style={[
+                        styles.optionButton,
+                        selectedOptionIndex === -1 && optText !== currentStep.correct && styles.optionIncorrect
+                      ]}
+                      onPress={() => handleStepBuilderSelect(optText, currentStep.correct)}
+                      activeOpacity={0.7}
+                      disabled={selectedOptionIndex !== null}
+                    >
+                      <FormattedText text={optText} textStyle={styles.optionText} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              );
+            })()}
+          </View>
+        )}
+
       </ScrollView>
+
+      {/* Floating Scratchpad Button for Calculation Questions */}
+      {(qType === 'mcq_calculation' || qType === 'step_builder') && (
+        <TouchableOpacity 
+          style={styles.scratchpadFab}
+          onPress={() => setScratchpadVisible(true)}
+        >
+          <MaterialIcons name="edit" size={24} color="#FFF" />
+        </TouchableOpacity>
+      )}
+
+      <ScratchpadModal
+        visible={scratchpadVisible}
+        onClose={() => setScratchpadVisible(false)}
+        paths={scratchpadPaths}
+        setPaths={setScratchpadPaths}
+      />
     </SafeAreaView>
   );
 }
@@ -497,7 +597,23 @@ const styles = StyleSheet.create({
     color: '#4ADE80',
   },
   optionTextIncorrect: {
-    color: '#F87171',
+    color: '#EF4444',
+  },
+  scratchpadFab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   textInput: {
     backgroundColor: '#1E293B',

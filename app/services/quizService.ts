@@ -84,6 +84,17 @@ export const BOOK_CHAPTERS: Record<string, Record<string, string>> = {
     'ch7': '0099',
     'ch8': '0105',
     'ch9': '0113',
+  },
+  maths: {
+    'ch1': '0004',
+    'ch2': '0019',
+    'ch3': '0026',
+    'ch4': '0036',
+    'ch5': '0044',
+    'ch6': '0050',
+    'ch7': '0060',
+    'ch8': '0067',
+    'ch9': '0077',
   }
 };
 
@@ -105,6 +116,17 @@ export const CHAPTER_TITLES: Record<string, Record<string, string>> = {
     'ch7': 'Properties of Matter',
     'ch8': 'Thermal Properties of Matter',
     'ch9': 'Transfer of Heat',
+  },
+  maths: {
+    'ch1': 'Real and Complex Numbers',
+    'ch2': 'Logarithms',
+    'ch3': 'Algebraic Expressions',
+    'ch4': 'Factorization',
+    'ch5': 'HCF/LCM and Square Root',
+    'ch6': 'Linear Equations and Inequalities',
+    'ch7': 'Linear Graphs',
+    'ch8': 'Quadratic Equations',
+    'ch9': 'Congruent Triangles',
   }
 };
 
@@ -113,7 +135,7 @@ export const preloadNextQuizzes = async (currentLevelIndex: number = 0, subject:
   const levels = Object.keys(chaptersMap).sort();
   
   const levelsToGenerate = levels.slice(currentLevelIndex, currentLevelIndex + 5);
-  const bookId = subject === 'physics' ? 'phy_9' : 'cs_9';
+  const bookId = subject === 'maths' ? 'maths_9' : subject === 'physics' ? 'phy_9' : 'cs_9';
   
   for (const levelId of levelsToGenerate) {
     const chapterId = chaptersMap[levelId];
