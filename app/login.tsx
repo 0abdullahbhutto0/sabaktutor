@@ -27,7 +27,7 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0} style={styles.container}>
-      <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
+      <Image source={require('../assets/images/sabaktutor-logo-removebg-preview.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.header}>SabakTutor</Text>
       <Text style={styles.title}>Welcome Back</Text>
       <Text style={styles.subtitle}>Continue your logic-first learning</Text>

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import ChunkyButton from '../components/ChunkyButton';
 
 export default function Profile() {
@@ -10,6 +11,24 @@ export default function Profile() {
   const { subject } = useLocalSearchParams<{ subject?: string }>();
   const subjectStr = subject || 'physics';
   const user = auth().currentUser;
+  
+  const [userData, setUserData] = useState<{ username?: string, grade?: string }>({});
+
+  useEffect(() => {
+    if (user?.uid) {
+      const subscriber = firestore()
+        .collection('users')
+        .doc(user.uid)
+        .onSnapshot(documentSnapshot => {
+          if (documentSnapshot && documentSnapshot.exists) {
+            setUserData(documentSnapshot.data() as any);
+          }
+        }, (error) => {
+          console.log("Profile listener detached due to logout or error:", error);
+        });
+      return () => subscriber();
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -17,6 +36,17 @@ export default function Profile() {
       // The _layout.tsx will automatically redirect the user to '/'
     } catch (error: any) {
       Alert.alert("Logout Error", error.message);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (user?.email) {
+      try {
+        await auth().sendPasswordResetEmail(user.email);
+        Alert.alert("Email Sent", "A password reset link has been sent to your email address.");
+      } catch (error: any) {
+        Alert.alert("Error", error.message);
+      }
     }
   };
 
@@ -29,9 +59,28 @@ export default function Profile() {
       <View style={styles.content}>
         <View style={styles.profileCard}>
           <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{user?.email?.charAt(0).toUpperCase() || 'U'}</Text>
+            <Text style={styles.avatarText}>
+              {userData.username?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+            </Text>
           </View>
+          <Text style={styles.nameText}>{userData.username || 'Student'}</Text>
           <Text style={styles.emailText}>{user?.email}</Text>
+          
+          {userData.grade && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Class {userData.grade}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.menuContainer}>
+          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={handleChangePassword}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="lock-reset" size={24} color="#006d37" />
+              <Text style={styles.menuItemText}>Change Password</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#bbcbbb" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.actionContainer}>
@@ -41,7 +90,6 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
       </View>
-
     </SafeAreaView>
   );
 }
@@ -75,7 +123,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#e3efff',
-    marginBottom: 32,
+    marginBottom: 24,
     borderBottomWidth: 6, // chunky shadow
   },
   avatarPlaceholder: {
@@ -92,8 +140,53 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
+  nameText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#091d2e',
+    marginBottom: 4,
+  },
   emailText: {
-    fontSize: 18,
+    fontSize: 14,
+    color: '#6c7b6d',
+    marginBottom: 12,
+  },
+  badge: {
+    backgroundColor: '#e3efff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d1e4fb',
+  },
+  badgeText: {
+    color: '#004970',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  menuContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#e3efff',
+    overflow: 'hidden',
+    borderBottomWidth: 6, // chunky shadow
+    marginBottom: 24,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#ffffff',
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuItemText: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#091d2e',
   },
@@ -116,41 +209,5 @@ const styles = StyleSheet.create({
     color: '#b91c1c',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 2,
-    borderTopColor: '#e3efff',
-    paddingBottom: 24,
-    paddingTop: 12,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  navItem: {
-    alignItems: 'center',
-    position: 'relative',
-    flex: 1,
-  },
-  navText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  comingSoonBadge: {
-    position: 'absolute',
-    top: -8,
-    right: 16,
-    backgroundColor: '#fed023',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#6f5900',
-  },
-  comingSoonText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#6f5900',
   },
 });

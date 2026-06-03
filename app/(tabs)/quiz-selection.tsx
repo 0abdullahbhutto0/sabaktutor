@@ -110,6 +110,8 @@ let cachedStreak: number = 0;
 let hasPreloadedSubjects: Record<string, boolean> = {};
 let currentUserCacheId: string = "";
 
+const shownModalsGlobal: Record<string, boolean> = {};
+
 export default function MasteryMap() {
   const router = useRouter();
   const { subject, completedChapter } = useGlobalSearchParams<{ subject?: string; completedChapter?: string }>();
@@ -126,7 +128,6 @@ export default function MasteryMap() {
   const [userId, setUserId] = React.useState<string | null>(null);
   
   const [showCompletionModal, setShowCompletionModal] = React.useState(false);
-  const shownModalsRef = React.useRef<Record<string, boolean>>({});
 
   const fireScale = useSharedValue(1);
   const fireOpacity = useSharedValue(0.8);
@@ -312,15 +313,16 @@ export default function MasteryMap() {
     if (completedChapter) {
       const level = completedChapter;
       
-      if (shownModalsRef.current[level]) return;
+      if (shownModalsGlobal[level]) return;
 
       const lessonCompleted = progress[`lesson_${userId}_${bookId}_${level}`];
       const quizCompleted = progress[`quiz_${userId}_${bookId}_${level}`];
       const mockCompleted = progress[`descriptive_${userId}_${bookId}_${level}`];
       
       if (lessonCompleted && quizCompleted && !mockCompleted) {
-        shownModalsRef.current[level] = true;
+        shownModalsGlobal[level] = true;
         setShowCompletionModal(true);
+        router.setParams({ completedChapter: "" });
       }
     }
   }, [completedChapter, progress, userId, bookId]);
@@ -599,7 +601,7 @@ export default function MasteryMap() {
               style={styles.modalButtonPrimary}
               onPress={() => {
                 setShowCompletionModal(false);
-                router.replace({ pathname: "/mock-exams", params: { subject: subjectStr } });
+                router.navigate({ pathname: "/(tabs)/mock-exams", params: { subject: subjectStr } });
               }}
             >
               <Text style={styles.modalButtonText}>Take Mock Exam</Text>
