@@ -48,6 +48,10 @@ export default function Leaderboard() {
             setLoading(false);
           });
       } else {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+        }
+        setUsers([]);
         setLoading(false);
       }
     });
@@ -91,7 +95,7 @@ export default function Leaderboard() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity 
-          onPress={() => router.replace({ pathname: '/quiz-selection', params: { subject: subjectStr } })} 
+          onPress={() => router.navigate({ pathname: '/(tabs)/quiz-selection', params: { subject: subjectStr } })} 
           style={styles.backButton}
         >
           <MaterialIcons name="arrow-back" size={24} color="#006d37" />

@@ -8,7 +8,7 @@ export default function Splash() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Image source={require('../assets/images/sabaktutor-logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={require('../assets/images/sabaktutor-logo-removebg-preview.png')} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>
           <Text style={styles.titleGreen}>Moving Karachi{'\n'}from </Text>
           <Text style={styles.titleRed}>Ratta </Text>

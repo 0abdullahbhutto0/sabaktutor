@@ -309,7 +309,7 @@ export default function QuizScreen() {
               title="Back to Map" 
               onPress={() => {
                 if (passed) {
-                  router.replace({ pathname: '/quiz-selection', params: { subject: subjectStr, completedChapter: quizId } });
+                  router.navigate({ pathname: '/(tabs)/quiz-selection', params: { subject: subjectStr, completedChapter: quizId } });
                 } else {
                   router.back();
                 }
