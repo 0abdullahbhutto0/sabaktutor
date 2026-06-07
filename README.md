@@ -1,104 +1,364 @@
-<div align="center">
-  <img src="assets/images/sabaktutor-logo.png" alt="SabakTutor Logo" width="150" />
-  <h1>SabakTutor MVP</h1>
-  <p>An intelligent, logic-first learning platform for students, powered by RAG and dynamic LLM quiz generation.</p>
-</div>
+# 📚 SabakTutor MVP
+
+<p align="center">
+  <img src="assets/images/sabaktutor-logo.png" width="140" />
+</p>
+
+<p align="center">
+  <b>AI-Powered Adaptive Learning Platform with RAG, MCTS-Inspired Intelligence & Gamified Education</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Backend-FastAPI-green" />
+  <img src="https://img.shields.io/badge/Frontend-React%20Native-blue" />
+  <img src="https://img.shields.io/badge/LLM-OpenRouter-orange" />
+  <img src="https://img.shields.io/badge/Database-Firebase-yellow" />
+  <img src="https://img.shields.io/badge/License-MIT-lightgrey" />
+</p>
 
 ---
 
-## 🏗 Architecture Overview
+## 🚀 Overview
 
-SabakTutor is built with a modern stack consisting of a **React Native (Expo)** frontend, a **FastAPI (Python)** backend, and **Google Firebase** for real-time data and authentication.
+SabakTutor is an AI-driven adaptive learning system that converts structured curriculum into a **fully personalized, dynamic, and continuously evolving learning experience**.
 
-The core feature of SabakTutor is its **Dynamic RAG (Retrieval-Augmented Generation) Quiz Engine**. Instead of relying on a static database of questions, the system dynamically generates highly contextual quizzes tailored to the curriculum.
+It combines:
 
-### 1. The RAG Engine (Backend)
-
-- **Document Ingestion:** The curriculum (e.g., Computer Science Grade 9) is loaded from structured JSON files (`cs_9.json`).
-- **Vector Indexing:** The text is chunked and embedded using local FAISS hybrid search, allowing the system to retrieve the most relevant sections of a chapter.
-- **LLM Streaming:** The selected chunks are passed via prompt to an LLM (powered by OpenRouter, currently utilizing `openrouter/owl-alpha`). The backend (`QuizGenerator`) enforces a strict structure (25% easy, 50% medium, 25% hard) and dynamically streams the response.
-- **Firestore Integration:** The parsed quizzes are automatically serialized and pushed directly to Firebase Firestore under the user's specific composite ID.
-
-### 2. The Frontend (React Native)
-
-- **Mastery Map:** A dynamically generated zig-zag map that visually tracks student progress.
-- **Sequential Unlocking:** The frontend listens to the `users/{userId}/progress` collection in Firestore. Chapters are strictly gated; Chapter N only unlocks when Chapter N-1 is passed with a score of 60% or higher.
-- **Background Generation:** To bypass rate-limits and timeouts, the app triggers background generation requests sequentially. The backend silently generates the curriculum ahead of the user.
-- **Session Management:** Built with Expo Router, the app enforces strict routing rules preventing unauthorized access to the map or accidental swipe-backs to the login screen.
+- 🧠 LLM-based tutoring (ChatBuddy)
+- 📚 Retrieval-Augmented Generation (RAG)
+- 🧩 FAISS-based vector storage for curriculum chunks
+- 🗺️ Node-based learning progression system
+- 🧪 Dynamic quiz + exam generation
+- 🌲 MCTS-inspired adaptive learning path optimization
+- 🏆 Gamification (XP, streaks, leaderboard)
 
 ---
 
-## 🚀 Getting Started
+## 🧠 System Architecture
 
-To run SabakTutor locally, you will need to start both the Python backend and the Expo frontend.
+```mermaid
+flowchart TB
 
-### Prerequisites
+A[ React Native App] --> B[FastAPI Backend]
 
-- Node.js (v18+)
-- Python (3.10+)
-- Firebase Project setup with Authentication & Firestore enabled.
-- OpenRouter API Key
+A --> F[Firebase Auth + Firestore]
+B --> F
 
-### 1. Backend Setup (FastAPI)
+B --> C[ RAG Pipeline]
 
-Navigate to the backend directory and set up your Python virtual environment:
+C --> D[FAISS Vector Store]
+C --> E[Book Chunk Indexing System]
 
-```bash
-cd backend
-python -m venv .venv
+B --> G[Quiz Generator LLM]
+B --> H[Exam Evaluation Engine]
+B --> I[ChatBuddy Memory System]
 
-# On Windows:
-.venv\Scripts\activate
-# On Mac/Linux:
-source .venv/bin/activate
+G --> J[OpenRouter LLM]
+H --> J
+I --> J
 
-pip install -r requirements.txt
+B --> K[MCTS + Hybrid Scoring Engine]
+
+K --> D
+K --> E
+
+B --> L[Ranked Learning Nodes]
+L --> A
 ```
-
-Create a `.env` file in the **root** of the project (outside the backend folder) with the following variables:
-
-```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_MODEL=openrouter/owl-alpha
-EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-```
-
-You must also place your Firebase Admin SDK service account file at `/backend/firebase-adminsdk.json`.
-
-Run the backend server:
-
-```bash
-python -m api.main
-```
-
-The server will run on `http://localhost:8000`.
-
-### 2. Frontend Setup (React Native / Expo)
-
-Open a new terminal and navigate to the project root:
-
-```bash
-npm install
-```
-
-Ensure you have your Firebase configuration (GoogleServices-Info.plist for iOS, google-services.json for Android) set up for React Native Firebase.
-
-Update the `BACKEND_URL` in `app/services/quizService.ts` to match your local IP address where the FastAPI server is running (e.g., `http://192.168.1.xxx:8000`).
-
-Start the Expo development server:
-
-```bash
-npx expo start
-```
-
-Press `a` to open in an Android Emulator, or `i` for an iOS Simulator.
 
 ---
 
-## 📱 Core User Flow
+## 🔐 Authentication & Onboarding
 
-1. **Signup/Login:** User authenticates via Firebase.
-2. **Mastery Map Loading:** The app queries the backend sequentially to ensure the next 5 chapter quizzes are dynamically generated and waiting in Firestore.
-3. **Quiz Execution:** User clicks an unlocked chapter, takes the RAG-generated quiz, and submits.
-4. **Progress & Energy:** If the score is >= 60%, the progress is saved to Firestore. The Mastery Map instantly reflects this by unlocking the next chapter, coloring the path green, and updating the dynamic Energy Badge (10 points per correct answer).
+* Firebase Authentication (Login / Signup)
+* Class selection (Grade 9)
+* Subject selection:
+
+  * 📘 Mathematics
+  * 💻 Computer Science
+  * 🔬 Physics
+
+---
+
+## 💬 ChatBuddy (AI Tutor)
+
+* RAG-based responses using FAISS-retrieved book chunks
+* Karachi curriculum contextual adaptation
+* Short-term memory (last 5 messages)
+* Long-term summarized memory
+* Fast conversational inference pipeline
+
+---
+
+## 🗺️ Learning Map (Node-Based Progression System)
+
+* Each node = lesson + flashcards + quiz
+* Sequential unlocking (Node N → Node N+1)
+* Firestore-synced progress tracking
+* Adaptive progression based on performance
+
+---
+
+## 📚 FAISS-Based Retrieval System
+
+FAISS is used as the **core vector database for storing and retrieving curriculum chunks**.
+
+### Responsibilities:
+
+* Stores embedded book chunks
+* Enables semantic search over curriculum
+* Feeds context into:
+
+  * ChatBuddy
+  * Quiz generation
+  * Exam evaluation
+
+```text
+Retrieval Score = cosine_similarity(query_embedding, chunk_embedding)
+```
+
+---
+
+## 📖 Flashcards System
+
+* Definitions
+* Formulas
+* Key concepts
+* Pre-quiz reinforcement layer
+
+---
+
+## 🧪 Adaptive Quiz Engine
+
+* LLM-generated questions using FAISS context
+* 10 questions per chapter:
+
+  * MCQs (major weight)
+  * Fill in the blanks
+  * True/False
+
+### Rules:
+
+* 3 ❤️ lives per quiz
+* Difficulty-balanced generation
+* Context-aware question creation
+
+---
+
+## 🧾 Exam Mode (Advanced Evaluation System)
+
+### Mathematics / Computer Science:
+
+* 4 short questions
+* 1 long question
+
+### Physics:
+
+* 2 theory
+* 2 numericals
+* 1 long question
+
+### Features:
+
+* Scratchpad for rough work
+* Math-special keyboard
+* LLM-based step-by-step evaluation
+* Weak-area detection + feedback
+
+---
+
+## 🏆 Leaderboard & Gamification
+
+* Global ranking system
+* XP-based progression
+* Daily streak tracking
+* Competitive learning dynamics
+
+---
+
+## ⚙️ Backend Intelligence Layer
+
+### 🧠 FAISS Retrieval Layer
+
+```text
+Retrieval Score = similarity(query_embedding, chunk_embedding)
+```
+
+---
+
+### 🧠 Value Prediction Model
+
+```text
+Value(Node) = LLM_mastery_gain + historical_success_rate
+```
+
+---
+
+### 🌲 MCTS-Inspired Scoring
+
+```text
+Score(Node) =
+Q(Node) +
+C × sqrt(ln(N) / n(Node)) +
+V(Node)
+```
+
+---
+
+### 🔗 Final Fusion Score
+
+```text
+Final Score =
+  α × FAISS_Score +
+  β × Value_Prediction +
+  γ × MCTS_Score
+```
+
+---
+
+## 🔄 Learning Flow
+
+1. Login / Signup
+2. Select Class & Subject
+3. Enter Learning Map
+4. Unlock Node
+5. Study Lesson + Flashcards
+6. Attempt Quiz
+7. Unlock Next Node
+8. Take Exam Mode
+9. Earn XP + Leaderboard Rank
+
+---
+
+## 🧱 Tech Stack
+
+| Layer     | Technology               |
+| --------- | ------------------------ |
+| Frontend  | React Native (Expo)      |
+| Backend   | FastAPI (Python)         |
+| Vector DB | FAISS                    |
+| Database  | Firebase Firestore       |
+| LLM       | OpenRouter               |
+| Retrieval | Hybrid RAG               |
+| Streaming | Server-Sent Events (SSE) |
+
+---
+
+# 📸 UI / UX Showcase
+
+---
+
+## 🔐 Login & Signup Flow
+
+<p align="center">
+  <img src="assets/screenshots/landing.jpg" width="180" />
+  <img src="assets/screenshots/login.jpg" width="180" />
+</p>
+
+---
+
+## 🗺️ Learning Map (Node Progression System)
+
+<p align="center">
+  <img src="assets/screenshots/map.jpg" width="220" />
+</p>
+
+---
+
+## 💬 ChatBuddy Interface
+
+<p align="center">
+  <img src="assets/screenshots/chat.jpg" width="220" />
+</p>
+
+---
+
+## 🧪 Quiz Interface
+
+<p align="center">
+  <img src="assets/screenshots/quiz.jpg" width="220" />
+</p>
+
+---
+
+## 🧾 Exam Mode
+
+<p align="center">
+  <img src="assets/screenshots/exam.jpg" width="220" />
+</p>
+
+---
+
+## 🧾 Exam Evaluation Breakdown
+
+<p align="center">
+  <img src="assets/screenshots/evaluation_1.jpg" width="180" />
+  <img src="assets/screenshots/evaluation_2.jpg" width="180" />
+</p>
+
+---
+
+## 🏆 Leaderboard
+
+<p align="center">
+  <img src="assets/screenshots/leaderboard.jpg" width="220" />
+</p>
+
+---
+
+## 🔥 Daily Streak
+
+<p align="center">
+  <img src="assets/screenshots/streak.jpg" width="220" />
+</p>
+
+---
+## ⚔️ Comparison With Existing Platforms
+
+| Feature             | Duolingo       | Khan Academy | SabakTutor                         |
+| ------------------- | -------------- | ------------ | ---------------------------------- |
+| Content             | Static lessons | Video-based  | 🧠 AI-generated dynamic content    |
+| Personalization     | Rule-based     | Limited      | Fully adaptive AI system           |
+| Question Generation | Fixed          | Fixed        | 🔥 Real-time LLM + FAISS           |
+| Memory System       | ❌              | ❌            | 💬 ChatBuddy memory (short + long) |
+| Learning Path       | Linear         | Semi-linear  | 🌲 MCTS-based adaptive graph       |
+| Evaluation          | Basic scoring  | MCQ-based    | 🧠 LLM step-by-step grading        |
+| Exam System         | ❌              | Partial      | 🧾 Full AI exam engine             |
+| Intelligence Layer  | None           | None         | ⚙️ FAISS + Value + MCTS fusion     |
+
+---
+
+## 🧠 Key Innovation
+
+SabakTutor is not a traditional LMS.
+
+It is:
+
+> A self-adaptive AI learning system combining retrieval-augmented generation, vector search (FAISS), and reinforcement-inspired decision-making.
+
+---
+
+## 🚀 Why This Project Stands Out
+
+* Real FAISS-based retrieval system
+* Dynamic AI quiz + exam generation
+* Memory-aware conversational tutor
+* Adaptive learning path optimization
+* Multi-signal ranking engine (FAISS + Value + MCTS)
+* Full production-grade backend architecture
+
+---
+
+## 📜 License
+
+MIT License
+
+---
+
+## ⭐ Future Improvements
+
+* Voice-enabled ChatBuddy
+* OCR-based math input solver
+* Multiplayer quiz battles
+* Teacher analytics dashboard
+* Parent progress tracking system
