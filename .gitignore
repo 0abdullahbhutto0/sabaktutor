@@ -43,6 +43,7 @@ yarn-error.*
 
 app-example
 firestore_schema_plan.md
+google-services.json
 # generated native folders
 /ios
 /android
