@@ -1,7 +1,7 @@
 # 📚 SabakTutor MVP
 
 <p align="center">
-  <img src="assets/images/sabaktutor-logo.png" width="140" />
+  <img src="assets/images/sabaktutor-logo-removebg-preview.png" width="140" />
 </p>
 
 <p align="center">
